@@ -41,6 +41,7 @@ the RMS of `test_transmission.pcm` divided by the RMS of the trimmed phrase
 than 3 dB from `test_transmission.pcm`. espeak-ng `-D` is its deterministic
 mode. sox `-D` turns dither off.
 
-On the committed files the low voice sits near 90 Hz and the high voice near
-300 Hz (median of voiced 40 ms windows). The copied phrases are left as they
-are; this script does not rebuild them.
+On the committed files, median `w0` over voiced sub-frames in
+`vectors/low_voice_params.csv` and `vectors/high_voice_params.csv` is about
+75 Hz and 225 Hz (upstream's pitch tracker in the 3200 params dump). The copied
+phrases are left as they are; this script does not rebuild them.

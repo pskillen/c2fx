@@ -4,7 +4,7 @@
 
 # Build vectors/ from every .pcm under tests/data/voice and tests/data/signals.
 #
-# Kit: $C2FX_BLACKBOX, or ~/build/c2-blackbox when that is unset.
+# Kit: directory named by $C2FX_BLACKBOX (required).
 # The kit is upstream Codec 2, run as a black box. This script does not
 # build it, and CI must not either.
 #
@@ -48,7 +48,7 @@ trap 'rm -rf "$tmp"' EXIT
 {
   grep -E '^(Upstream:|Commit:|Build:)' "$BB/UPSTREAM"
   echo "Generated: 2026-11-24"
-  echo "Kit: ~/build/c2-blackbox (override with C2FX_BLACKBOX)"
+  echo "Kit: a local black-box kit, located by \$C2FX_BLACKBOX"
   cat << 'EOF'
 Commands:
   c2enc 3200 <set>.pcm <tmp>.c2

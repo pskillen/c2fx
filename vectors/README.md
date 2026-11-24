@@ -32,23 +32,51 @@ it anyway. The PCM matches a decode of the headered file; `tools/make_vectors.sh
 checks that before keeping the output. On these inputs the decode has the
 same number of samples as the PCM that was encoded.
 
+`high_voice_c2dec.pcm` has five samples at 32767 in upstream's decode output;
+that saturation comes from upstream, not from the input PCM.
+
 ## Parameter CSV
 
 `c2sim --rate 3200 --lspEWov <file> <set>.pcm` writes one 92-byte record per
 10 ms sub-frame (two records per 20 ms codec frame), 23 little-endian
 float32 values:
 
-| Floats | CSV column | What a black-box comparison showed |
+| Floats | CSV column | Meaning |
 |---|---|---|
-| 0–9 | `lsp_0` … `lsp_9` | Ten LSP values. Unchanged if `--rate 3200` is left off |
-| 10 | `energy` | Matches column 4 of `--dump_pitch_e` when `--rate` is left off. With `--rate 3200` it moves |
-| 11 | `w0` | Matches column 1 of `--dump_pitch_e` when `--rate` is left off. With `--rate 3200` it moves. The floor on silence is 0.03927, which is `2 * pi * 50 / 8000` |
-| 12 | `voicing` | 0 or 1. Matches column 3 of `--dump_pitch_e` with or without `--rate 3200` |
+| 0–9 | `lsp_0` … `lsp_9` | Ten analysis LSPs (radians). Unquantized; unchanged when `--rate 3200` is on |
+| 10 | `energy` | Post-3200 energy (what the decoder path sees), not the analysis energy in `--dump_pitch_e` |
+| 11 | `w0` | Post-3200 pitch (rad/sample), not the analysis pitch in `--dump_pitch_e` |
+| 12 | `voicing` | 0 or 1 |
 | 13–22 | not stored | Zero unless `--rate` is set. Not interpreted here |
 
-`--dump_pitch_e` was the cross-check. It has pitch and energy, not the LSPs.
-`--lsp` and `--modelout` do not add a text LSP dump. `--modelout` writes a
-1300-byte binary record per sub-frame and was left unused.
+The committed CSV stores quantized `w0` and `energy` plus unquantized LSPs.
+Compared with `--dump_pitch_e` on the same PCM, the analysis pitch and energy
+differ by up to about 1e-3 rad in `w0` and by tens of units in `energy`
+(for example sub-frame 40 on `low_voice`: CSV energy 79.0 vs analysis 93.1;
+unvoiced floors 0.1 in the CSV vs 0.0005 in the pitch dump). On silence,
+`w0` in the CSV stays at 0.03927, which is `2 * pi * 50 / 8000`.
+
+Column layout was cross-checked with both tools at `--rate 3200` (required).
+`--lspEWov` without `--rate` aborts on `low_voice`; `make_vectors.sh` always
+passes `--rate 3200`. Neither `--dump_pitch_e` nor the four-column pitch file
+works without `--rate 3200` (empty file or a single energy column only).
+
+On `test_transmission.pcm` and `low_voice.pcm`:
+
+```text
+c2sim --rate 3200 --lspEWov lsp.bin <set>.pcm
+c2sim --rate 3200 --lpc 10 --dump_pitch_e pitch.txt <set>.pcm
+```
+
+Compare `lsp.bin` float 11 to column 1 of `pitch.txt`, float 12 to column 3,
+and float 10 to column 4. Maximum absolute difference on both inputs:
+about 1.05e-3 on `w0`, 0 on voicing. At `--rate 3200`, float
+10 is not the same number as column 4 (quantized vs analysis), which is why
+the CSV energy column follows `lsp.bin`, not the pitch dump.
+
+`--dump_pitch_e` has pitch and energy only, not LSPs. `--lsp` and `--modelout`
+do not add a text LSP dump. `--modelout` writes a 1300-byte binary record per
+sub-frame and was left unused.
 
 ## Regenerating
 
@@ -56,6 +84,6 @@ float32 values:
 tools/make_vectors.sh
 ```
 
-The kit defaults to `~/build/c2-blackbox`. `C2FX_BLACKBOX` overrides that
-directory. The script reads the kit's `UPSTREAM` for the commit and build
+The kit path comes from `C2FX_BLACKBOX` (see `tools/make_vectors.sh`). The
+script reads the kit's `UPSTREAM` for the commit and build
 lines, and refuses a `c2enc` output whose size is not 7 plus 8 bytes per frame.

@@ -2,7 +2,7 @@ Upstream: https://github.com/drowe67/codec2
 Commit:   310777b1c6f1af0bc7c72f5b32f80f6fd9136962 (2026-03-17, "Merge pull request #74 from rafael2k/main")
 Build:    cmake -DCMAKE_BUILD_TYPE=Release, gcc 15.2.0, cmake 4.2.3, built 2026-11-24
 Generated: 2026-11-24
-Kit: ~/build/c2-blackbox (override with C2FX_BLACKBOX)
+Kit: a local black-box kit, located by $C2FX_BLACKBOX
 Commands:
   c2enc 3200 <set>.pcm <tmp>.c2
   strip the 7-byte header -> vectors/<set>.c2
