@@ -3,7 +3,7 @@
 
 # Clean room
 
-c2fx is original work under the MIT license. The implementation does not derive from the Codec 2 project's LGPL sources. The quantizer tables, when they arrive, are interoperability data and are the only files with that origin. [NOTICE](../NOTICE) states their status.
+c2fx is original work under the MIT license. The implementation does not derive from the Codec 2 project's LGPL sources. The quantizer table values in `src/tables/c2_3200_tab.c` are interoperability data and are the only source whose numeric content has that origin. [NOTICE](../NOTICE) states their status.
 
 Four roles keep the people who read restricted material away from the people who write code. An agent that has read restricted source never implements. An implementer is a fresh session, and its brief cites this repository's specification and files, not upstream source.
 

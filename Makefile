@@ -50,6 +50,10 @@ $(BUILD)/cflags.stamp: force
 	printf '%s\n' '$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS)' > $@.tmp
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
+$(BUILD)/tables/%.o: src/tables/%.c src/tables/%.h include/c2fx.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
+
 $(BUILD)/%.o: src/%.c include/c2fx.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@

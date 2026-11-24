@@ -5,7 +5,7 @@
 
 `c2_3200_tab.c` and `c2_3200_tab.h` hold the ten 5-bit LSP quantizer codebooks used by Codec 2 at 3200 bit/s (`c2fx_lsp_tab[10][32]`, values in Hz).
 
-These are the only tracked files whose numeric content comes from the Codec 2 project. The implementation otherwise follows this repository's specification; see [NOTICE](../../NOTICE) and [docs/clean-room.md](../../docs/clean-room.md).
+`c2_3200_tab.c` is the only source file whose values come from upstream Codec 2 data files; `vectors/` holds upstream tool output committed as test data. The implementation otherwise follows this repository's specification; see [NOTICE](../../NOTICE) and [docs/clean-room.md](../../docs/clean-room.md).
 
 ## Regenerate
 

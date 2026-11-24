@@ -25,7 +25,7 @@ Paths not yet in the tree are planned.
 | `src/` | Portable fixed-point code |
 | `src/dsp/` (planned) | This library's own FFT and trigonometry, left out when a host supplies them |
 | `src/arch/armv7em/`, `src/arch/csky/` (planned) | Architecture-specific kernels |
-| `src/tables/` (planned) | Generated quantizer tables |
+| `src/tables/` | Generated quantizer tables (`c2_3200_tab.c`) |
 | `model/` (planned) | Floating-point oracle, for the host only, never linked into a product build |
 | `tests/` | Host tests |
 | `vectors/` (planned) | Committed test vectors |
@@ -65,4 +65,4 @@ tools/check_no_float.sh build/csky-dsp "${CSKY_PREFIX}"
 
 ## License
 
-[MIT](LICENSE). [NOTICE](NOTICE) records the quantizer tables' origin. Those tables are not in the tree yet.
+[MIT](LICENSE). [NOTICE](NOTICE) records the origin of the quantizer tables in `src/tables/c2_3200_tab.c`.
