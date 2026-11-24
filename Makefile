@@ -18,7 +18,7 @@ CC ?= gcc
 AR ?= ar
 BUILD ?= build/host
 
-CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
+CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror -Wdouble-promotion -Wfloat-conversion
 EXTRA_CFLAGS ?=
 CPPFLAGS := -Iinclude
 
