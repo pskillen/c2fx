@@ -11,14 +11,14 @@
 # ARM_PREFIX and CSKY_PREFIX are the cross tool prefixes, including the
 # trailing hyphen.
 
-ARM_PREFIX ?= $(HOME)/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
-CSKY_PREFIX ?= $(HOME)/toolchains/csky-elf/bin/csky-elf-
+ARM_PREFIX ?= arm-none-eabi-
+CSKY_PREFIX ?= csky-elf-
 
 CC ?= gcc
 AR ?= ar
 BUILD ?= build/host
 
-CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
+CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror -Wdouble-promotion -Wfloat-conversion
 EXTRA_CFLAGS ?=
 CPPFLAGS := -Iinclude
 
@@ -67,8 +67,14 @@ sanitize:
 cross-arm:
 	$(MAKE) archive BUILD=build/arm CC='$(ARM_PREFIX)gcc' AR='$(ARM_PREFIX)ar' EXTRA_CFLAGS='$(ARM_CFLAGS)'
 
+ifeq ($(CSKY_DSP),1)
+CSKY_BUILD := build/csky-dsp
+else
+CSKY_BUILD := build/csky
+endif
+
 cross-csky:
-	$(MAKE) archive BUILD=build/csky CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
+	$(MAKE) archive BUILD=$(CSKY_BUILD) CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
 
 clean:
 	rm -rf build

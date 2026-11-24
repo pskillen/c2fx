@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The c2fx Authors
+
+# Undefined symbols permitted in cross-built objects. One symbol per line.
+
+memcpy
+memset
+memmove
+
+# Host or arch may supply these; undefined until linked.
+c2fx_rfft512
+c2fx_irfft512
+c2fx_cos
+c2fx_log2_q11
+c2fx_exp2_q11
+
+# Arm EABI integer and memory helpers.
+__aeabi_idiv
+__aeabi_uidiv
+__aeabi_idivmod
+__aeabi_uidivmod
+__aeabi_ldivmod
+__aeabi_uldivmod
+__aeabi_lmul
+__aeabi_llsl
+__aeabi_llsr
+__aeabi_lasr
+__aeabi_memcpy
+__aeabi_memcpy4
+__aeabi_memcpy8
+__aeabi_memset
+__aeabi_memset4
+__aeabi_memset8
+__aeabi_memclr
+__aeabi_memclr4
+__aeabi_memclr8
+__aeabi_memmove
+__aeabi_memmove4
+__aeabi_memmove8
+
+# C-SKY / libgcc integer helpers.
+__divsi3
+__udivsi3
+__modsi3
+__umodsi3
+__muldi3
+__divdi3
+__udivdi3
+__moddi3
+__umoddi3
+__ashldi3
+__ashrdi3
+__lshrdi3
+__clzsi2
+__ctzsi2

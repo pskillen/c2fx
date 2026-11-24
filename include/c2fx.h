@@ -14,7 +14,7 @@
 /* One codec frame, 64 bits, packed into 8 bytes. */
 #define C2FX_BITS_BYTES 8
 
-/* The encode and decode API lands in P4. */
+/* The encode and decode API lands with the decoder. */
 const char *c2fx_version(void);
 
 #endif

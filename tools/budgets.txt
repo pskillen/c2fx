@@ -17,3 +17,8 @@ csky.radio = DM-32UV
 csky.total = 16384
 csky.decoder_objs =
 csky.encoder_objs =
+
+csky-dsp.radio = DM-32UV
+csky-dsp.total = 16384
+csky-dsp.decoder_objs =
+csky-dsp.encoder_objs =
