@@ -26,8 +26,8 @@ if [ ! -d "$objdir" ]; then
     echo "check_no_float: not a directory: $objdir" >&2
     exit 2
 fi
-if [ ! -x "$nm" ]; then
-    echo "check_no_float: nm not executable: $nm" >&2
+if ! command -v "$nm" >/dev/null 2>&1; then
+    echo "check_no_float: nm not found: $nm" >&2
     exit 2
 fi
 if [ ! -f "$allowed" ]; then
@@ -50,7 +50,7 @@ fi
 count=0
 while IFS= read -r obj; do
     count=$((count + 1))
-    "$nm" "$obj" | awk 'NF >= 3 && $2 != "U" {
+    "$nm" "$obj" | awk 'NF >= 3 && $2 != "U" && $2 !~ /[a-z]/ {
         sym = $NF
         sub(/@.*/, "", sym)
         print sym

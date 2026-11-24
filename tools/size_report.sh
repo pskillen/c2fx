@@ -17,6 +17,10 @@ fi
 
 target=$1
 size_tool=${2:-size}
+if ! command -v "$size_tool" >/dev/null 2>&1; then
+    echo "size_report: size tool not found: $size_tool" >&2
+    exit 2
+fi
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 budgets=$script_dir/budgets.txt
@@ -49,7 +53,27 @@ budget_get() {
 }
 
 object_bytes() {
-    "$size_tool" "$1" | awk 'NR == 2 { printf "%d\n", $1 + $2 }'
+    obj=$1
+    set +e
+    out=$("$size_tool" "$obj" 2>&1)
+    status=$?
+    set -e
+    if [ "$status" -ne 0 ]; then
+        echo "size_report: $size_tool failed on $obj" >&2
+        exit 2
+    fi
+    bytes=$(printf '%s\n' "$out" | awk '
+        NR == 2 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ {
+            printf "%d\n", $1 + $2
+            ok = 1
+        }
+        END { if (!ok) exit 1 }
+    ')
+    if [ -z "$bytes" ]; then
+        echo "size_report: no parseable size for $obj" >&2
+        exit 2
+    fi
+    printf '%s\n' "$bytes"
 }
 
 if ! total_budget=$(budget_get "${target}.total"); then
