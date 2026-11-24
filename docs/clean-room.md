@@ -3,7 +3,7 @@
 
 # Clean room
 
-c2fx is original work under the MIT license. The implementation does not derive from the Codec 2 project's LGPL sources. The quantizer tables, when they arrive, are interoperability data and are the only files with that origin. [NOTICE](../NOTICE) states their status.
+c2fx is original work under the MIT license. The implementation does not derive from the Codec 2 project's LGPL sources. The quantizer table values in `src/tables/c2_3200_tab.c` are interoperability data and are the only source whose numeric content has that origin. [NOTICE](../NOTICE) states their status.
 
 Four roles keep the people who read restricted material away from the people who write code. An agent that has read restricted source never implements. An implementer is a fresh session, and its brief cites this repository's specification and files, not upstream source.
 
@@ -54,6 +54,7 @@ The maintainer builds upstream at that commit outside every repository and gives
 | 2026-11-24 | spec writer | Spec writer | E8: `x08_voicing_and_state.py`: voicing patterns, determinism, start-up, extreme LSPs, all 128 pitches | Voicing observations (OQ-1), start-up (OQ-7), extremes (OQ-8) | n/a (no source read) | c2-3200.md rev 2 |
 | 2026-11-24 | spec writer | Spec writer | E9: `c2sim <raw> --modelout`, `--rate 3200` (by hand, not scripted) | Model dump record size and w0 grid | n/a (no source read) | c2-3200.md rev 2 |
 | 2026-11-24 | spec writer | Spec writer | L1: No literature was opened. Sections 5 and 7 rest on the PDF and on experiment; the minimum-phase construction is standard textbook material, not consulted | Recorded so the log is honest: nothing outside the kit's `doc/` and `codebook/` was read | n/a (no source read) | c2-3200.md rev 2 |
+| 2026-11-24 | P2b table importer (Composer) | Table importer | Upstream codebook `dlsp1.txt` … `dlsp10.txt` (lists of integers) at commit `310777b1c6f1af0bc7c72f5b32f80f6fd9136962`, via the black-box kit; SHA-256 checked in `tools/import_tables.py` | Import the 3200 LSP quantizer tables into `src/tables/` as interoperability data | n/a (no source read) | c2-3200.md rev 2 |
 
 ## Open questions
 

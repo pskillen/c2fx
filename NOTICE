@@ -5,7 +5,7 @@
 
 c2fx is MIT-licensed. See [LICENSE](LICENSE).
 
-The quantizer table values in `src/tables/` (added later) come from Codec 2 (<https://github.com/drowe67/codec2>, LGPL-2.1). They are interoperability data: the numbers a Codec 2 3200 bitstream uses, carried as data rather than as code from that project.
+The quantizer table values in `src/tables/c2_3200_tab.c` come from Codec 2 (<https://github.com/drowe67/codec2>, LGPL-2.1). They are interoperability data: the numbers a Codec 2 3200 bitstream uses, carried as data rather than as code from that project.
 
 An MIT grant for those values will be requested from the Codec 2 authors. Status: not yet requested.
 
