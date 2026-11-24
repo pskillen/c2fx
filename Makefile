@@ -41,7 +41,7 @@ ifeq ($(CSKY_DSP),1)
 CSKY_CFLAGS += -Wa,-mdsp
 endif
 
-.PHONY: all archive test sanitize cross-arm cross-csky clean force
+.PHONY: all archive test sanitize cross-arm cross-csky clean force wav
 
 all: archive
 
@@ -108,6 +108,20 @@ endif
 
 cross-csky:
 	$(MAKE) archive BUILD=$(CSKY_BUILD) CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
+
+build/c2m_dec: model/c2m_dec.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+wav: build/c2m_dec
+	mkdir -p build/wav
+	@set -eu; \
+	for f in vectors/*.c2; do \
+		base=$$(basename "$$f" .c2); \
+		build/c2m_dec "$$f" "build/wav/$$base.pcm"; \
+		python3 tools/pcm_to_wav.py "build/wav/$$base.pcm" "build/wav/$$base.wav"; \
+		rm -f "build/wav/$$base.pcm"; \
+	done
 
 clean:
 	rm -rf build
