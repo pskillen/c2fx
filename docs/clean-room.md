@@ -61,7 +61,7 @@ The maintainer builds upstream at that commit outside every repository and gives
 | 2026-11-25 | spec writer | Spec writer | E10: `x09_post_filter_fit.py`: fit of `gamma`, `beta` and the energy constant against decoded harmonic levels | Post-filter exponents; energy offset | n/a (no source read) | c2-3200.md rev 3 |
 | 2026-11-25 | spec writer | Spec writer | E11: `x10_w0_interpolation.py`: pitch of sub-frame a after voiced and unvoiced frames; start-up | `w0` interpolation; initial state | n/a (no source read) | c2-3200.md rev 3 |
 | 2026-11-25 | spec writer | Spec writer | E12: `x07_interpolation.py` part C: 10-sample ramp resolution | Synthesis window shape | n/a (no source read) | c2-3200.md rev 3 |
-| 2026-11-24 | P3a implementer | Implementer | This repository's `docs/spec/c2-3200.md` revision 2 (sections 1–6 and 9), `src/tables/`, and `vectors/`. No upstream source | Float-model front half: frame, dequantizers, interpolation, LSP to LPC, harmonic envelope | n/a (no source read) | c2-3200.md rev 2 |
+| 2026-11-25 | P3a implementer | Implementer | This repository's `docs/spec/c2-3200.md` revision 3 (sections 1–6 and 9), `src/tables/`, and `vectors/`. No upstream source | Float-model front half: frame, dequantizers, interpolation, LSP to LPC, harmonic envelope | n/a (no source read) | c2-3200.md rev 3 |
 
 ## Open questions
 
