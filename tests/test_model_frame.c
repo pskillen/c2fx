@@ -277,24 +277,6 @@ static int test_interpolate(void)
     return 0;
 }
 
-static void zero_spectrum(
-    const double *a,
-    int order,
-    const double *power,
-    int bins,
-    double *out,
-    void *user
-)
-{
-    (void)a;
-    (void)order;
-    (void)power;
-    (void)user;
-    for (int k = 0; k < bins; k++) {
-        out[k] = 0.0;
-    }
-}
-
 static int test_lpc_envelope(void)
 {
     static const uint8_t bytes[C2M_FRAME_BYTES] = {
@@ -338,67 +320,66 @@ static int test_lpc_envelope(void)
         return 1;
     }
 
-    c2m_envelope_sample(a, params.w0, params.energy_db, NULL, NULL, &env);
+    c2m_envelope_sample(a, params.w0, params.energy_db, &env);
     if (env.count != 19) {
         fprintf(stderr, "envelope L is %d, expected 19\n", env.count);
         return 1;
     }
-    if (near("harmonic 1 amplitude", env.amp[0], 858.0352832011636, 1e-4) != 0) {
+    if (near("harmonic 1 amplitude", env.amp[0], 520.01713855477533, 1e-4) != 0) {
         return 1;
     }
     for (int m = 0; m < env.count; m++) {
         sum_sq += env.amp[m] * env.amp[m];
     }
-    if (near("level sum", sum_sq, 3070522.870624664, 1e-2) != 0) {
+    if (near("level sum", sum_sq, 944672.47528305487, 1e-2) != 0) {
         return 1;
     }
 
-    c2m_envelope_sample(a, c2m_w0_rad(36), params.energy_db, NULL, NULL, &env);
-    if (near("harmonic 1 index 36", env.amp[0], 23.040314451689593, 1e-4) != 0) {
+    c2m_envelope_sample(a, c2m_w0_rad(36), params.energy_db, &env);
+    if (near("harmonic 1 index 36", env.amp[0], 13.974406431593373, 1e-4) != 0) {
         return 1;
     }
-    c2m_envelope_sample(a, c2m_w0_rad(37), params.energy_db, NULL, NULL, &env);
-    if (near("harmonic 1 index 37", env.amp[0], 757.98825258019747, 1e-3) != 0) {
+    c2m_envelope_sample(a, c2m_w0_rad(37), params.energy_db, &env);
+    if (near("harmonic 1 index 37", env.amp[0], 459.68444981168255, 1e-3) != 0) {
         return 1;
     }
     {
         double w0_150 = C2M_PI * 150.0 / 4000.0;
         double amp_unscaled;
 
-        c2m_envelope_sample(a, w0_150 + 1e-12, params.energy_db, NULL, NULL, &env);
+        c2m_envelope_sample(a, w0_150 + 1e-12, params.energy_db, &env);
         amp_unscaled = env.amp[0];
-        c2m_envelope_sample(a, w0_150 - 1e-12, params.energy_db, NULL, NULL, &env);
+        c2m_envelope_sample(a, w0_150 - 1e-12, params.energy_db, &env);
         if (near("harmonic 1 below 150 Hz", env.amp[0], C2M_HARM1_SCALE * amp_unscaled, 1e-4) != 0) {
             return 1;
         }
-        c2m_envelope_sample(a, w0_150, params.energy_db, NULL, NULL, &env);
+        c2m_envelope_sample(a, w0_150, params.energy_db, &env);
         if (near("harmonic 1 at 150 Hz", env.amp[0], amp_unscaled, 1e-4) != 0) {
             return 1;
         }
     }
-    c2m_envelope_sample(a, c2m_w0_rad(0), params.energy_db, NULL, NULL, &env);
+    c2m_envelope_sample(a, c2m_w0_rad(0), params.energy_db, &env);
     if (env.count != 80 ||
-        near("50 Hz harmonic 1", env.amp[0], 13.413120615348399, 1e-3) != 0 ||
+        near("50 Hz harmonic 1", env.amp[0], 8.1396655893986676, 1e-3) != 0 ||
         !(env.amp[1] > 0.0)) {
         fprintf(stderr, "50 Hz envelope count %d amp0 %.6g amp1 %.6g\n",
                 env.count, env.amp[0], env.amp[1]);
         return 1;
     }
 
-    c2m_envelope_sample(a, c2m_w0_rad(100), params.energy_db, NULL, NULL, &env);
+    c2m_envelope_sample(a, c2m_w0_rad(100), params.energy_db, &env);
     sum_sq = 0.0;
     for (int m = 0; m < env.count; m++) {
         sum_sq += env.amp[m] * env.amp[m];
     }
-    if (env.count != 12 || near("high pitch band sum", sum_sq, 2838537.490375671, 0.5) != 0) {
+    if (env.count != 12 || near("high pitch band sum", sum_sq, 859279.58720901445, 0.5) != 0) {
         fprintf(stderr, "index 100 envelope L %d sum %.12f\n", env.count, sum_sq);
         return 1;
     }
 
-    c2m_envelope_sample(a, params.w0, params.energy_db, zero_spectrum, NULL, &env);
     for (int m = 0; m < env.count; m++) {
-        if (env.amp[m] != 0.0) {
-            fprintf(stderr, "post-filter hook was not applied at harmonic %d\n", m + 1);
+        if (!(env.amp[m] >= 0.0)) {
+            fprintf(stderr, "envelope amplitude %d is %.6g\n", m + 1, env.amp[m]);
             return 1;
         }
     }

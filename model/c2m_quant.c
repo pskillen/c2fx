@@ -5,6 +5,8 @@
 
 #include "c2_3200_tab.h"
 
+#include <math.h>
+
 double c2m_f0_hz(int index)
 {
     /* Spec 3.2. The divisor is 128; index 128 would be 400 Hz and is never used. */
@@ -45,4 +47,9 @@ void c2m_dequant(const c2m_indices *idx, c2m_params *out)
     }
     c2m_lsp_accept(out->lsp_hz);
     c2m_lsp_hz_to_rad(out->lsp_hz, out->lsp_rad);
+}
+
+double c2m_energy_power(double rel_db)
+{
+    return pow(10.0, (C2M_E_MIN_DB + rel_db) / 10.0);
 }
