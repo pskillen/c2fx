@@ -14,7 +14,7 @@ tag. Nothing generated is committed.
 - Scratch: `C2FX_WORK` (default `./work`). Generated files go there, and only there.
 - Python 3 with **numpy** (and nothing else): `python3 -m venv venv && venv/bin/pip install numpy`.
 - Run one: `C2FX_WORK=/tmp/c2 python3 x02_pitch_field.py`. Run all: `./run_all.sh venv/bin/python`.
-  The whole suite takes about 10 seconds.
+  The whole suite takes about a minute.
 
 `c2bb.py` is the shared helper (run the tools, pack frames, Gray code, textbook LSP to LPC, harmonic
 measurement). It is analysis code for experiments, not library code, and the implementation must not copy it:
@@ -34,8 +34,20 @@ the spec states every formula it uses.
 | `x08_voicing_and_state.py` | Voicing bit patterns, determinism, start-up, extreme indices, all 128 pitch indices | Observations that remain open questions (voicing rule, start-up state, out-of-range LSPs); every pitch index decodes periodic |
 | `x09_post_filter_fit.py` | Fits the post-filter exponents with the full envelope chain; the energy constant | `beta` 0.2-0.35 with `gamma` 0.3-0.7 (best 0.275 at 0.6, 0.74 dB rms); the energy offset |
 | `x10_w0_interpolation.py` | Harmonic-comb pitch of sub-frame a after voiced and unvoiced frames; start-up | `w0` midpoint if the previous sub-frame was voiced, current `w0` otherwise |
+| `x11_w0_quant.py` | Pulse trains and a pitch glide, compared with `c2sim --dump_pitch_e` | w0 index is the nearest grid point of the second 10 ms frame's analysis pitch; raw index 128 clips to 127 |
+| `x12_energy_quant.py` | Amplitude sweep, silence, full scale, loud/quiet blocks | Energy index is the nearest step of (10 log10 E + 10) * 32/50 on that same 10 ms frame; non-positive E is index 0 |
+| `x13_lsp_quant.py` | Closed-loop versus open-loop search on pulses, noise, a low sine, and the synthesized voice files | LSP indices are nearest-Hz differences off the quantized running sum; a target below 25 Hz takes index 0 |
+| `x14_corpus_fields.py` | Every PCM file under `tests/data`, all four field rules, both voicing bits | All 2260 frames match; the even 10 ms row does not |
+| `x15_analysis_window.py` | Impulses, a pulse-train vowel, a 20 Hz sine, against an order-10 LPC gain | 279-point Hann window centred at sample (s-1)*80, sum of squares 1/512; the sine does not follow this gain |
+| `x16_pitch_behaviour.py` | Pulse trains from 55 to 600 Hz, and pure tones from 50 to 400 Hz | Pulse trains inside 50-400 Hz track; pure tones do not come back at the tone frequency |
+| `x17_voicing_bits.py` | Noise, pulses, and an 180 Hz tone plus noise at several SNRs | Bit 0 and bit 1 are the two 10 ms voicing flags; the mixture does not switch at 6 dB |
+| `x18_energy_crosslink.py` | Encoder energy scale (index 0 = -10 dB) against the decoder's level offset; refit with the offset fixed | If `E_MIN_DB` is -10 dB the synthesis gain is about 6 dB (factor 2); both recommended post-filter pairs fit within 0.4 dB |
 
 `c2sim` facts (I-3) were checked by hand, not scripted: `c2sim <raw> -o <out> --modelout <file>` writes one
 1300-byte record per 10 ms analysis frame (`float32 w0`, `int32 L`, `float32 A[161]`, `float32 phi[161]`,
 `int32 voiced`, little endian: this layout is inferred from the record size and the values, not from source);
 with `--rate 3200` the w0 in the records is already quantised on the 3200 grid (index 37 gave 151.172 Hz).
+`x11` through `x17` drive `c2sim --rate 3200` with `--lspEWov` and with `--lpc 10 --dump_pitch_e`.
+The pitch-dump columns, in order, are analysis `w0` (radians/sample), a second number that is not the
+voicing decision, the voicing flag (0 or 1), and the analysis energy. `--lspEWov` is the 92-byte record
+in `vectors/README.md`: ten unquantized LSP frequencies in radians, then the quantized energy and `w0`.
