@@ -5,7 +5,9 @@
 # Output goes to stdout; redirect or tee as you like. Generated data stays in $C2FX_WORK (default ./work).
 PY="${1:-python3}"
 cd "$(dirname "$0")" || exit 1
-for x in x0*.py; do
+status=0
+for x in x[0-9]*.py; do
   echo "=== $x"
-  "$PY" "$x" || echo "FAILED: $x"
+  "$PY" "$x" || { echo "FAILED: $x"; status=1; }
 done
+exit $status

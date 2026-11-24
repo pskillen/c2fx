@@ -87,9 +87,6 @@ def main():
     for r in grid[:8]:
         print("  %.3f  gamma %.2f beta %.2f const %.2f" % r)
     print("no post filter (beta 0) rms %.3f; without bass boost at the best cell: %.3f" % (score(data, 0.5, 0.0)[0], score(data, grid[0][1], grid[0][2], bass=False)[0]))
-    c = grid[0][3]
-    print("energy scale: at e = 20 the global constant is %.2f dB, so (E_MIN_DB + synthesis gain) = %.2f dB "
-          "given 1.5625 dB per step (x03); the constant cannot be split between the two by output alone" % (c, c - 1.5625 * 20))
     # refine
     g0, b0 = grid[0][1], grid[0][2]
     fine = []
@@ -101,6 +98,14 @@ def main():
     print("refined (rms dB, gamma, beta, const):")
     for r in fine[:8]:
         print("  %.3f  gamma %.3f beta %.3f const %.2f" % r)
+    # recommended sets and their energy offsets: (E_MIN_DB + synthesis gain) = const - 1.5625 * 20, because the
+    # constant is measured at e = 20 and the energy step is 1.5625 dB (x03). The output alone cannot split the sum.
+    sbest, gbest, bbest, cbest = fine[0]
+    spdf, cpdf = score(data, 0.5, 0.2)
+    print("RECOMMENDED (refined best): gamma %.3f beta %.3f rms %.3f dB  offset at e=20 %.2f dB  E_MIN_DB+synthesis gain %.2f dB"
+          % (gbest, bbest, sbest, cbest, cbest - 1.5625 * 20))
+    print("PDF PAIR: gamma 0.500 beta 0.200 rms %.3f dB  offset at e=20 %.2f dB  E_MIN_DB+synthesis gain %.2f dB"
+          % (spdf, cpdf, cpdf - 1.5625 * 20))
     # ridge: for each gamma the best beta and its rms
     print("best beta per gamma (rms):")
     for gamma in (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
