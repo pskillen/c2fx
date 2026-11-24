@@ -20,9 +20,9 @@ BUILD ?= build/host
 
 CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror -Wdouble-promotion -Wfloat-conversion
 EXTRA_CFLAGS ?=
-CPPFLAGS := -Iinclude
+CPPFLAGS := -Iinclude -Isrc/tables
 
-SRCS := src/c2fx_version.c
+SRCS := src/c2fx_version.c $(wildcard src/tables/*.c)
 OBJS := $(SRCS:src/%.c=$(BUILD)/%.o)
 
 ARM_CFLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Os -ffunction-sections -fdata-sections
@@ -54,10 +54,15 @@ $(BUILD)/%.o: src/%.c include/c2fx.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
 
-test: $(BUILD)/test_version
+test: $(BUILD)/test_version $(BUILD)/test_tables
 	$(BUILD)/test_version
+	$(BUILD)/test_tables
 
 $(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
+
+$(BUILD)/test_tables: tests/test_tables.c $(BUILD)/libc2fx.a src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
 
