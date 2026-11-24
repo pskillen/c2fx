@@ -28,7 +28,7 @@ CPPFLAGS := -Iinclude -Isrc/tables
 # Host float model. No -Wdouble-promotion or -Wfloat-conversion: the oracle uses double.
 MODEL_CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
 MODEL_CPPFLAGS := -Imodel -Isrc/tables -Iinclude
-MODEL_SRCS := model/c2m_frame.c
+MODEL_SRCS := model/c2m_frame.c model/c2m_quant.c model/c2m_decode.c
 MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c)
