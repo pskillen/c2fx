@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The c2fx Authors
 
 #include "c2m_decode.h"
+#include "c2m_lpc.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -252,6 +253,109 @@ static int test_interpolate(void)
     return 0;
 }
 
+static void zero_spectrum(
+    const double *a,
+    int order,
+    const double *power,
+    int bins,
+    double *out,
+    void *user
+)
+{
+    (void)a;
+    (void)order;
+    (void)power;
+    (void)user;
+    for (int k = 0; k < bins; k++) {
+        out[k] = 0.0;
+    }
+}
+
+static int test_lpc_envelope(void)
+{
+    static const uint8_t bytes[C2M_FRAME_BYTES] = {
+        0xd6, 0x75, 0xef, 0x7b, 0xde, 0xf7, 0xbd, 0xef
+    };
+    static const double expect_a[C2M_LPC_ORDER + 1] = {
+        1.0000000000000000e+00,
+        -2.0875197867998265e+00,
+        2.8871893991494755e+00,
+        -3.5202319085810885e+00,
+        3.6477991707337312e+00,
+        -3.2432717041757630e+00,
+        2.5676863562437702e+00,
+        -1.7484554414783167e+00,
+        9.8127244229526478e-01,
+        -4.1200142761961889e-01,
+        9.0477641201940573e-02
+    };
+    c2m_indices idx;
+    c2m_params params;
+    c2m_envelope env;
+    double a[C2M_LPC_ORDER + 1];
+    double sum_sq = 0.0;
+
+    if (c2m_frame_unpack(bytes, &idx) != 0) {
+        return 1;
+    }
+    c2m_dequant(&idx, &params);
+    c2m_lsp_to_lpc(params.lsp_rad, a);
+    for (int k = 0; k <= C2M_LPC_ORDER; k++) {
+        if (near("lpc coefficient", a[k], expect_a[k], 1e-8) != 0) {
+            return 1;
+        }
+    }
+    if (c2m_harmonic_count(params.w0) != 19) {
+        fprintf(stderr, "example L is %d, expected 19\n", c2m_harmonic_count(params.w0));
+        return 1;
+    }
+    if (c2m_harmonic_count(c2m_w0_rad(0)) != 80) {
+        fprintf(stderr, "50 Hz L is %d, expected 80\n", c2m_harmonic_count(c2m_w0_rad(0)));
+        return 1;
+    }
+
+    c2m_envelope_sample(a, params.w0, params.energy_db, NULL, NULL, &env);
+    if (env.count != 19) {
+        fprintf(stderr, "envelope L is %d, expected 19\n", env.count);
+        return 1;
+    }
+    if (near("harmonic 1 amplitude", env.amp[0], 858.0352832011636, 1e-4) != 0) {
+        return 1;
+    }
+    for (int m = 0; m < env.count; m++) {
+        sum_sq += env.amp[m] * env.amp[m];
+    }
+    if (near("level sum", sum_sq, 3070522.870624664, 1e-2) != 0) {
+        return 1;
+    }
+
+    c2m_envelope_sample(a, c2m_w0_rad(36), params.energy_db, NULL, NULL, &env);
+    if (env.amp[0] != 0.0) {
+        fprintf(stderr, "harmonic 1 present at index 36 (%.6f)\n", env.amp[0]);
+        return 1;
+    }
+    c2m_envelope_sample(a, c2m_w0_rad(37), params.energy_db, NULL, NULL, &env);
+    if (!(env.amp[0] > 0.0)) {
+        fprintf(stderr, "harmonic 1 absent at index 37\n");
+        return 1;
+    }
+    c2m_envelope_sample(a, c2m_w0_rad(0), params.energy_db, NULL, NULL, &env);
+    if (env.count != 80 || env.amp[0] != 0.0 || !(env.amp[1] > 0.0)) {
+        fprintf(stderr, "50 Hz envelope count %d amp0 %.6g amp1 %.6g\n",
+                env.count, env.amp[0], env.amp[1]);
+        return 1;
+    }
+
+    c2m_envelope_sample(a, params.w0, params.energy_db, zero_spectrum, NULL, &env);
+    for (int m = 0; m < env.count; m++) {
+        if (env.amp[m] != 0.0) {
+            fprintf(stderr, "post-filter hook was not applied at harmonic %d\n", m + 1);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int test_pack_rejects(void)
 {
     c2m_indices idx;
@@ -274,7 +378,8 @@ static int test_pack_rejects(void)
 int main(void)
 {
     if (test_gray() != 0 || test_random() != 0 || test_example() != 0 ||
-        test_dequant() != 0 || test_interpolate() != 0 || test_pack_rejects() != 0) {
+        test_dequant() != 0 || test_interpolate() != 0 || test_lpc_envelope() != 0 ||
+        test_pack_rejects() != 0) {
         return 1;
     }
     return 0;
