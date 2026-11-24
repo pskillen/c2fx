@@ -8,6 +8,9 @@
 # CK803S:               make cross-csky
 # CK803S with DSP asm:  make cross-csky CSKY_DSP=1
 #
+# model/ is the host float oracle. It is built by `make test` only.
+# The archive and the cross builds do not contain it.
+#
 # ARM_PREFIX and CSKY_PREFIX are the cross tool prefixes, including the
 # trailing hyphen.
 
@@ -21,6 +24,12 @@ BUILD ?= build/host
 CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror -Wdouble-promotion -Wfloat-conversion
 EXTRA_CFLAGS ?=
 CPPFLAGS := -Iinclude -Isrc/tables
+
+# Host float model. No -Wdouble-promotion or -Wfloat-conversion: the oracle uses double.
+MODEL_CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
+MODEL_CPPFLAGS := -Imodel -Isrc/tables -Iinclude
+MODEL_SRCS := model/c2m_frame.c
+MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c)
 OBJS := $(SRCS:src/%.c=$(BUILD)/%.o)
@@ -47,7 +56,7 @@ force: ;
 
 $(BUILD)/cflags.stamp: force
 	mkdir -p $(dir $@)
-	printf '%s\n' '$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS)' > $@.tmp
+	printf '%s\n' '$(CC) $(CFLAGS) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $(MODEL_CPPFLAGS)' > $@.tmp
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
 $(BUILD)/tables/%.o: src/tables/%.c src/tables/%.h include/c2fx.h $(BUILD)/cflags.stamp
@@ -58,9 +67,18 @@ $(BUILD)/%.o: src/%.c include/c2fx.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
 
-test: $(BUILD)/test_version $(BUILD)/test_tables
+test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame
 	$(BUILD)/test_version
 	$(BUILD)/test_tables
+	$(BUILD)/test_model_frame
+
+$(BUILD)/model/%.o: model/%.c $(wildcard model/*.h) src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -c $< -o $@
+
+$(BUILD)/test_model_frame: tests/test_model_frame.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 $(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
