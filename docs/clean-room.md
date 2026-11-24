@@ -55,7 +55,13 @@ The maintainer builds upstream at that commit outside every repository and gives
 | 2026-11-24 | spec writer | Spec writer | E9: `c2sim <raw> --modelout`, `--rate 3200` (by hand, not scripted) | Model dump record size and w0 grid | n/a (no source read) | c2-3200.md rev 2 |
 | 2026-11-24 | spec writer | Spec writer | L1: No literature was opened. Sections 5 and 7 rest on the PDF and on experiment; the minimum-phase construction is standard textbook material, not consulted | Recorded so the log is honest: nothing outside the kit's `doc/` and `codebook/` was read | n/a (no source read) | c2-3200.md rev 2 |
 | 2026-11-24 | P2b table importer (Composer) | Table importer | Upstream codebook `dlsp1.txt` … `dlsp10.txt` (lists of integers) at commit `310777b1c6f1af0bc7c72f5b32f80f6fd9136962`, via the black-box kit; SHA-256 checked in `tools/import_tables.py` | Import the 3200 LSP quantizer tables into `src/tables/` as interoperability data | n/a (no source read) | c2-3200.md rev 2 |
+| 2026-11-25 | source reader (Claude) | Source reader | `defines.h`, upstream commit `310777b1c6f1af0bc7c72f5b32f80f6fd9136962` | OQ-6 | yes, 2026-11-25 | c2-3200.md rev 3 uses the answers |
+| 2026-11-25 | source reader (Claude) | Source reader | `quantise.c`, upstream commit `310777b1c6f1af0bc7c72f5b32f80f6fd9136962` | OQ-3, OQ-4, OQ-8 | yes, 2026-11-25 | c2-3200.md rev 3 uses the answers |
+| 2026-11-25 | source reader (Claude) | Source reader | `codec2.c`, upstream commit `310777b1c6f1af0bc7c72f5b32f80f6fd9136962` | OQ-1, OQ-2, OQ-7 | yes, 2026-11-25 | c2-3200.md rev 3 uses the answers |
+| 2026-11-25 | spec writer | Spec writer | E10: `x09_post_filter_fit.py`: fit of `gamma`, `beta` and the energy constant against decoded harmonic levels | Post-filter exponents; energy offset | n/a (no source read) | c2-3200.md rev 3 |
+| 2026-11-25 | spec writer | Spec writer | E11: `x10_w0_interpolation.py`: pitch of sub-frame a after voiced and unvoiced frames; start-up | `w0` interpolation; initial state | n/a (no source read) | c2-3200.md rev 3 |
+| 2026-11-25 | spec writer | Spec writer | E12: `x07_interpolation.py` part C: 10-sample ramp resolution | Synthesis window shape | n/a (no source read) | c2-3200.md rev 3 |
 
 ## Open questions
 
-The spec lists OQ-1 to OQ-9 (`docs/spec/c2-3200.md`, "Open questions"): facts the documents and black-box runs did not settle. They await the owner's decision on source reads (role "Source reader"); none has been read.
+The spec lists OQ-1 to OQ-9 (`docs/spec/c2-3200.md`, "Open questions"): facts the documents and black-box runs did not settle. OQ-6, OQ-3, OQ-4, OQ-8 and parts of OQ-1, OQ-2, OQ-7 were answered by the three source reads logged above; the rest await the owner's decision on further reads.
