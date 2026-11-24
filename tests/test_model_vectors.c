@@ -11,11 +11,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* CSV w0 is float32 of the quantized pitch. Frame k lines up with CSV rows
- * 2k (sub-frame a) and 2k+1 (sub-frame b). Sub-frame b carries this frame's
- * dequantized w0. Compared only where the CSV marks sub-frame b voiced.
+/* CSV w0 is float32 of the quantized pitch; 1e-6 still catches an off-by-one
+ * index (grid step ~2.15e-3 rad) and float32 rounding (observed max ~3.3e-8).
+ * Sub-frame a rows in the CSV are on the quantizer grid, not interpolated
+ * midpoints, so this test compares sub-frame b only.
+ * Frame k lines up with CSV rows 2k (sub-frame a) and 2k+1 (sub-frame b).
  */
 #define W0_ABS_TOL 1e-6
+#define LSP_ABS_TOL_TONE 0.05
+#define LSP_ABS_TOL_SPEECH 0.5
 
 #define MAX_SETS 64
 #define NAME_LEN 256
@@ -36,19 +40,53 @@ static int name_less(const void *left, const void *right)
     return strcmp(left, right);
 }
 
-static int read_row(FILE *csv, int *subframe, double *w0, int *voiced)
+static int read_row(
+    FILE *csv,
+    int *subframe,
+    double *w0,
+    int *voiced,
+    double lsp_rad[C2M_LSP_ORDER]
+)
 {
-    char line[256];
+    char line[512];
     double voicing;
+    double energy;
+    double lsp[C2M_LSP_ORDER];
+    int n;
 
     if (fgets(line, (int)sizeof line, csv) == NULL) {
         return 1;
     }
-    if (sscanf(line, "%d,%lf,%lf", subframe, w0, &voicing) != 3) {
+    n = sscanf(line, "%d,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf",
+               subframe, w0, &voicing, &energy,
+               &lsp[0], &lsp[1], &lsp[2], &lsp[3], &lsp[4],
+               &lsp[5], &lsp[6], &lsp[7], &lsp[8], &lsp[9]);
+    if (n < 3) {
         fprintf(stderr, "bad parameter row: %s", line);
         return -1;
     }
     *voiced = voicing >= 0.5;
+    if (lsp_rad != NULL) {
+        if (n < 14) {
+            fprintf(stderr, "LSP columns missing: %s", line);
+            return -1;
+        }
+        for (int j = 0; j < C2M_LSP_ORDER; j++) {
+            lsp_rad[j] = lsp[j];
+        }
+    }
+    return 0;
+}
+
+static int is_tone_set(const char *base)
+{
+    if (strncmp(base, "sine_", 5) == 0) {
+        return 1;
+    }
+    if (strcmp(base, "dc_8000") == 0 || strcmp(base, "noise_xorshift") == 0 ||
+        strcmp(base, "silence") == 0) {
+        return 1;
+    }
     return 0;
 }
 
@@ -90,6 +128,11 @@ static int check_set(const char *dir, const char *c2_name)
     int unvoiced_match = 0;
     double voiced_max = 0.0;
     double unvoiced_max = 0.0;
+    double lsp_tol;
+    int lsp_n = 0;
+    int lsp_match = 0;
+    double lsp_max = 0.0;
+    double lsp_sum = 0.0;
     int failed = 0;
 
     base_len = strlen(c2_name) - 3;
@@ -99,6 +142,7 @@ static int check_set(const char *dir, const char *c2_name)
     }
     memcpy(base, c2_name, base_len);
     base[base_len] = '\0';
+    lsp_tol = is_tone_set(base) ? LSP_ABS_TOL_TONE : LSP_ABS_TOL_SPEECH;
 
     snprintf(path, sizeof path, "%s/%s", dir, c2_name);
     bits = fopen(path, "rb");
@@ -135,6 +179,7 @@ static int check_set(const char *dir, const char *c2_name)
         int voiced_b;
         double w0_a;
         double w0_b;
+        double lsp_b[C2M_LSP_ORDER];
 
         if (got == 0) {
             break;
@@ -144,8 +189,8 @@ static int check_set(const char *dir, const char *c2_name)
             failed = 1;
             break;
         }
-        if (read_row(csv, &sub_a, &w0_a, &voiced_a) != 0 ||
-            read_row(csv, &sub_b, &w0_b, &voiced_b) != 0) {
+        if (read_row(csv, &sub_a, &w0_a, &voiced_a, NULL) != 0 ||
+            read_row(csv, &sub_b, &w0_b, &voiced_b, lsp_b) != 0) {
             fprintf(stderr, "%s frame %d has no parameter pair\n", base, frame);
             failed = 1;
             break;
@@ -199,6 +244,30 @@ static int check_set(const char *dir, const char *c2_name)
                 unvoiced_match += 1;
             }
         }
+
+        if (voiced_b) {
+            double frame_max = 0.0;
+
+            lsp_n += 1;
+            for (int j = 0; j < C2M_LSP_ORDER; j++) {
+                double err = fabs(sub[1].lsp_rad[j] - lsp_b[j]);
+
+                if (err > frame_max) {
+                    frame_max = err;
+                }
+            }
+            lsp_sum += frame_max;
+            if (frame_max > lsp_max) {
+                lsp_max = frame_max;
+            }
+            if (frame_max <= lsp_tol) {
+                lsp_match += 1;
+            } else if (is_tone_set(base)) {
+                fprintf(stderr, "%s frame %d sub-frame b LSP max %.4g csv mismatch\n",
+                        base, frame, frame_max);
+                failed = 1;
+            }
+        }
         frame += 1;
     }
 
@@ -206,7 +275,7 @@ static int check_set(const char *dir, const char *c2_name)
         int extra_sub = 0;
         int extra_voiced = 0;
         double extra_w0 = 0.0;
-        int extra = read_row(csv, &extra_sub, &extra_w0, &extra_voiced);
+        int extra = read_row(csv, &extra_sub, &extra_w0, &extra_voiced, NULL);
 
         if (extra == 0) {
             fprintf(stderr, "%s has parameter rows past the bitstream\n", base);
@@ -223,11 +292,19 @@ static int check_set(const char *dir, const char *c2_name)
     if (!failed) {
         double rate = voiced_n == 0 ? 1.0 : (double)voiced_match / (double)voiced_n;
         double urate = unvoiced_n == 0 ? 1.0 : (double)unvoiced_match / (double)unvoiced_n;
+        double lrate = lsp_n == 0 ? 1.0 : (double)lsp_match / (double)lsp_n;
+        double lmean = lsp_n == 0 ? 0.0 : lsp_sum / (double)lsp_n;
 
         printf("%s: frames %d voiced_b %d/%d rate %.4f max_abs %.3e"
-               " unvoiced_b %d/%d rate %.4f max_abs %.3e\n",
+               " unvoiced_b %d/%d rate %.4f max_abs %.3e"
+               " lsp_b %d/%d rate %.4f max %.3e mean_max %.3e tol %.2f\n",
                base, frame, voiced_match, voiced_n, rate, voiced_max,
-               unvoiced_match, unvoiced_n, urate, unvoiced_max);
+               unvoiced_match, unvoiced_n, urate, unvoiced_max,
+               lsp_match, lsp_n, lrate, lsp_max, lmean, lsp_tol);
+        if (!is_tone_set(base) && lmean > lsp_tol) {
+            fprintf(stderr, "%s speech LSP mean max %.3e above tol %.2f\n", base, lmean, lsp_tol);
+            failed = 1;
+        }
     }
     return failed;
 }
@@ -266,8 +343,9 @@ int main(void)
     qsort(names, (size_t)count, NAME_LEN, name_less);
 
     printf("alignment: codec frame k <-> CSV rows 2k (sub-frame a) and 2k+1 (sub-frame b)\n");
-    printf("compare: decoded sub-frame b w0 vs CSV w0, absolute tolerance %g, voiced only\n",
-           W0_ABS_TOL);
+    printf("compare: decoded sub-frame b w0 and LSPs vs CSV;"
+           " w0 tol %g; LSP tol %.2f tone / %.1f speech (per-frame max rad)\n",
+           W0_ABS_TOL, LSP_ABS_TOL_TONE, LSP_ABS_TOL_SPEECH);
     for (int i = 0; i < count; i++) {
         if (check_set(dir, names[i]) != 0) {
             failed = 1;
