@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x03: the energy field: bits 9..13, Gray coded, 1.5625 dB per step, and how it sets the output level.
 
 Part A: sweep the 32 values with everything else fixed, measure output rms (steady state).
@@ -32,7 +32,7 @@ def main():
     for wi in (5, 20, 30, 55, 80, 110, 127):
         f0 = b.w0_hz(wi)
         L = int(4000 // f0)
-        offs = []
+        offs, offp = [], []
         for _ in range(10):
             while True:
                 g = rng.integers(3, 18, 10)
@@ -42,12 +42,15 @@ def main():
             a = b.lsp_to_lpc(f)
             seg = b.decode([b.make_frame(1, 1, wi, 20, g)] * 40)[3000:5400]
             pw = np.array([b.harm_amp(seg, m * f0) ** 2 for m in range(1, L + 1)])
-            Hk = 1 / np.abs(b.aresp(a, np.arange(256) * b.FS / 512)) ** 2
+            # bins 0..256 (257 bins, Nyquist included); a band is clipped to this range
+            Hk = 1 / np.abs(b.aresp(a, np.arange(257) * b.FS / 512)) ** 2
             r = f0 * 512 / b.FS
-            bs = np.array([Hk[int(np.floor((m - 0.5) * r + 0.5)):int(np.floor((m + 0.5) * r + 0.5))].sum() for m in range(1, L + 1)])
+            bs = np.array([Hk[int(np.floor((m - 0.5) * r + 0.5)):min(int(np.floor((m + 0.5) * r + 0.5)), 257)].sum() for m in range(1, L + 1)])
+            pt = np.array([Hk[min(int(np.floor(m * r + 0.5)), 256)] for m in range(1, L + 1)])   # point sample at the harmonic's bin
             s = 1 if f0 < 150 else 0   # first harmonic is removed below 150 Hz (x06)
             offs.append(10 * np.log10(pw[s:].sum()) - 10 * np.log10(bs[s:].sum()))
-        print(f"  w0 idx {wi:3d} f0 {f0:6.1f} L {L:2d}: offset mean {np.mean(offs):6.2f} dB sd {np.std(offs):4.2f}")
+            offp.append(10 * np.log10(pw[s:].sum()) - 10 * np.log10(pt[s:].sum()))
+        print(f"  w0 idx {wi:3d} f0 {f0:6.1f} L {L:2d}: band-sum offset mean {np.mean(offs):6.2f} dB sd {np.std(offs):4.2f}; point-sample offset mean {np.mean(offp):6.2f}")
 
 
 if __name__ == "__main__":

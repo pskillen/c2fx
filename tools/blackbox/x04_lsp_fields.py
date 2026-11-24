@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x04: the LSP field: bits 14..63, ten 5-bit Gray-coded indices, each into dlsp<j>.txt (Hz);
 the LSPs are the running sum of the ten table values.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x02: the fundamental-frequency field: bits 2..8, Gray coded, f0 = 50 + 350*i/128 Hz.
 
 Method: decode 60 identical frames per index and measure the frequency of the harmonics of the output

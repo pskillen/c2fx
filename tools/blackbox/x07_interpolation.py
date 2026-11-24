@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x07: how the first sub-frame of a frame is obtained from the previous and the current frame.
 
 Decode 6 frames of A then 6 of B (w0 constant, so each harmonic is a steady sinusoid) and follow the

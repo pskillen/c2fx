@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x05: the post filter and bass boost. c2dec's --nopf has no effect on 3200; the envelope the decoder
 applies is -20log|A| plus a post-filter term plus a low-frequency step.
 

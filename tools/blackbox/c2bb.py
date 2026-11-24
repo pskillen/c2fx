@@ -1,16 +1,18 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """Shared helpers for the black-box experiments: run c2enc / c2dec / c2sim from the kit,
 pack and unpack 3200 frames, make test signals. Only runs the kit's tools; never reads source.
 
-Environment: C2FX_BLACKBOX (kit, default ~/build/c2-blackbox), C2FX_WORK (scratch, default ./work).
+Environment: C2FX_BLACKBOX (the kit directory, required), C2FX_WORK (scratch, default ./work).
 Needs numpy (see README.md)."""
 import os
 import subprocess
 import tempfile
 import numpy as np
 
-BB = os.path.expanduser(os.environ.get("C2FX_BLACKBOX", "~/build/c2-blackbox"))
+if not os.environ.get("C2FX_BLACKBOX"):
+    raise SystemExit("C2FX_BLACKBOX is not set: point it at the black-box kit directory (see docs/clean-room.md)")
+BB = os.path.expanduser(os.environ["C2FX_BLACKBOX"])
 WORK = os.path.abspath(os.environ.get("C2FX_WORK", "work"))
 os.makedirs(WORK, exist_ok=True)
 FS = 8000

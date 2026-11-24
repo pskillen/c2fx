@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x08: voicing bits, determinism, start-up and out-of-range indices (observations, not a full model).
 
 A. Bits 0 and 1: which combinations decode as voiced (periodic) in steady state and in transitions.

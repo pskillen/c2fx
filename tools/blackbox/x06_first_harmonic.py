@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x06: the first harmonic is removed when f0 is low.
 
 Decode steady frames for w0 indices 30..42 with several envelopes and energies; print the level of

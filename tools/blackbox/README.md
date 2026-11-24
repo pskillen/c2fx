@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: MIT -->
-<!-- Copyright (c) The c2fx Authors -->
+<!-- Copyright (c) 2026 The c2fx Authors -->
 # Black-box experiments
 
 Scripts that run the upstream Codec 2 tools **as black boxes** (`c2enc`, `c2dec`, `c2sim` from the kit)
@@ -9,12 +9,12 @@ tag. Nothing generated is committed.
 
 ## Setup
 
-- The kit: set `C2FX_BLACKBOX` to the kit directory (default `~/build/c2-blackbox`): `bin/c2enc`, `bin/c2dec`,
+- The kit: set `C2FX_BLACKBOX` to the kit directory (required; the scripts exit with a message if it is unset; the kit is described in `docs/clean-room.md`): `bin/c2enc`, `bin/c2dec`,
   `bin/c2sim` (wrappers), `codebook/*.txt` (read as lists of numbers).
 - Scratch: `C2FX_WORK` (default `./work`). Generated files go there, and only there.
 - Python 3 with **numpy** (and nothing else): `python3 -m venv venv && venv/bin/pip install numpy`.
 - Run one: `C2FX_WORK=/tmp/c2 python3 x02_pitch_field.py`. Run all: `./run_all.sh venv/bin/python`.
-  Whole suite takes a few minutes (each decode shells out to `c2dec`).
+  The whole suite takes about 10 seconds.
 
 `c2bb.py` is the shared helper (run the tools, pack frames, Gray code, textbook LSP to LPC, harmonic
 measurement). It is analysis code for experiments, not library code, and the implementation must not copy it:

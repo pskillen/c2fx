@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) The c2fx Authors
+# Copyright (c) 2026 The c2fx Authors
 """x01: the file header, the frame size, and which bits carry which field.
 
 Settles: c2enc writes a 7-byte header only when the output name ends in .c2; c2dec accepts both;
