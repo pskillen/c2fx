@@ -6,6 +6,7 @@ pack and unpack 3200 frames, make test signals. Only runs the kit's tools; never
 Environment: C2FX_BLACKBOX (the kit directory, required), C2FX_WORK (scratch, default ./work).
 Needs numpy (see README.md)."""
 import os
+import struct
 import subprocess
 import tempfile
 import numpy as np
@@ -188,3 +189,78 @@ def harm_env(pcm, f_hz, win=40):
 def rms(x):
     x = np.asarray(x, float)
     return float(np.sqrt(np.mean(x * x)))
+
+
+def unpack(frame_):
+    """Decoded (not Gray) fields of one 3200 frame: voicing bits, w0 index, energy index, ten LSP indices."""
+    return {
+        "v0": field(frame_, 0, 1),
+        "v1": field(frame_, 1, 1),
+        "w": gray_dec(field(frame_, 2, 7)),
+        "e": gray_dec(field(frame_, 9, 5)),
+        "lsp": [gray_dec(field(frame_, 14 + 5 * j, 5)) for j in range(10)],
+    }
+
+
+def quant_w0(w0_rad):
+    """Nearest 3200 pitch index of an analysis fundamental (radians/sample).
+
+    f0 = w0 * 8000 / (2*pi), then i = clip(round((f0 - 50) * 128 / 350), 0, 127).
+    """
+    f = float(w0_rad) * FS / (2 * np.pi)
+    return int(np.clip(np.round((f - 50.0) * 128.0 / 350.0), 0, 127))
+
+
+def quant_energy(energy):
+    """Nearest energy index. Index 0 is -10 dB and the step is 50/32 dB. Non-positive energy is index 0."""
+    if energy <= 0:
+        return 0
+    raw = (10.0 * np.log10(float(energy)) + 10.0) * 32.0 / 50.0
+    return int(np.clip(np.round(raw), 0, 31))
+
+
+def quant_lsp(lsp_rad):
+    """Ten LSP difference indices: nearest table entry, in Hz, to the residual from the quantized running sum."""
+    hz = np.asarray(lsp_rad, float) * FS / (2 * np.pi)
+    acc = 0.0
+    idx = []
+    for j in range(10):
+        target = hz[j] - acc
+        i = int(np.argmin(np.abs(DLSP[j] - target)))
+        idx.append(i)
+        acc += float(DLSP[j][i])
+    return idx
+
+
+def analyse(pcm):
+    """One PCM buffer through c2enc and through c2sim --rate 3200.
+
+    Returns (frames, pitch, lsp).
+    frames: one dict per 20 ms frame, from unpack().
+    pitch: one (w0 radians/sample, second column, voicing, energy) per 10 ms frame,
+    from --lpc 10 --dump_pitch_e. The second column is kept as printed and is not named.
+    lsp: one 23-float record per 10 ms frame, from --lspEWov. Floats 0..9 are the
+    unquantized LSP frequencies in radians.
+    """
+    raw, bits, lsp_path, pit = tmp(".raw"), tmp(".bin"), tmp(".lsp"), tmp(".pit")
+    try:
+        np.asarray(pcm, dtype="<i2").tofile(raw)
+        tool("c2enc", "3200", raw, bits)
+        tool("c2sim", "--rate", "3200", "--lspEWov", lsp_path, raw)
+        tool("c2sim", "--rate", "3200", "--lpc", "10", "--dump_pitch_e", pit, raw)
+        blob = open(bits, "rb").read()
+        frames = [unpack(blob[k:k + 8]) for k in range(0, len(blob) - 7, 8)]
+        pitch = []
+        for line in open(pit):
+            parts = line.split()
+            if len(parts) >= 4:
+                pitch.append(tuple(float(x) for x in parts[:4]))
+        raw_lsp = open(lsp_path, "rb").read()
+        if len(raw_lsp) % 92 != 0:
+            raise RuntimeError("lspEWov length is not a multiple of 92")
+        lsp = [struct.unpack_from("<23f", raw_lsp, i * 92) for i in range(len(raw_lsp) // 92)]
+        return frames, pitch, lsp
+    finally:
+        for path in (raw, bits, lsp_path, pit):
+            if os.path.exists(path):
+                os.remove(path)
