@@ -1,7 +1,9 @@
-A fixed-point implementation of the Codec 2 3200 bit/s mode, written from the published description; not affiliated with the Codec 2 project.
-
 <!-- SPDX-License-Identifier: MIT -->
 <!-- Copyright (c) 2026 The c2fx Authors -->
+
+# c2fx
+
+A fixed-point implementation of the Codec 2 3200 bit/s mode, written from the published description; not affiliated with the Codec 2 project.
 
 ## Status
 
