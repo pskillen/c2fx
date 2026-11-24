@@ -58,6 +58,15 @@ def main():
         best = min(res)
         print(f"  A {gA} B {gB}: best q = {best[1]:.1f} ({best[0]:.2f} dB); rms at q=0: {res[0][0]:.2f}, 0.5: {res[5][0]:.2f}, 1: {res[10][0]:.2f}")
 
+    print("\nC. ramp shape at 10-sample resolution (f0 = %.1f Hz, 20-sample boxcar): fraction of the way A->B, t = 940..1150" % b.w0_hz(127))
+    f0 = b.w0_hz(127)
+    out = b.decode([b.make_frame(1, 1, 127, 10, [10] * 10)] * 6 + [b.make_frame(1, 1, 127, 20, [10] * 10)] * 6)
+    for m in (2, 3):
+        env = b.harm_env(out, m * f0, win=20)
+        A, B = env[700:900].mean(), env[1300:1700].mean()
+        print(f"  harmonic {m}:", " ".join(f"{(env[t] - A) / (B - A):.2f}" for t in range(940, 1160, 10)))
+    print("  no flat stretch: the amplitude moves steadily over the whole 160 samples (a 40-sample-overlap trapezoid would not)")
+
 
 if __name__ == "__main__":
     main()

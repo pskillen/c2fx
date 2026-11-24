@@ -29,9 +29,11 @@ the spec states every formula it uses.
 | `x03_energy_field.py` | Sweeps the 32 energy values; relates output power to the 512-bin band sum of 1/\|A\|^2 | Energy is bits 9-13, Gray coded, 1.5625 dB per step; the level law and its constant |
 | `x04_lsp_fields.py` | Sweeps each of the ten 5-bit groups; regresses measured harmonic levels on the model | Ten Gray-coded 5-bit indices, group j into `dlsp<j+1>.txt` (Hz), LSPs are the running sum; the envelope is 1/\|A\|^1.2-like (post filter) plus a step below 1 kHz |
 | `x05_post_filter.py` | `--nopf` check; grid of post-filter variants against measured levels | `--nopf` has no effect at 3200; best variants and how weakly gamma/beta are pinned |
-| `x06_first_harmonic.py` | Steady frames across w0 indices 33-40 | Harmonic 1 is absent when f0 < about 150 Hz (index 36 absent, 37 present) |
-| `x07_interpolation.py` | A-to-B frame transitions with a steady w0; follows one harmonic's amplitude | The first sub-frame's energy is the geometric mean (dB midpoint) of previous and current; its LSPs are the Hz midpoint; ramp knots are at the sub-frame centres |
+| `x06_first_harmonic.py` | Steady frames across w0 indices 33-40 | Harmonic 1 is scaled by 0.032 (about -30 dB) when f0 < 150 Hz (index 36 reduced, 37 full level) |
+| `x07_interpolation.py` | A-to-B frame transitions with a steady w0; follows one harmonic's amplitude (part C: the ramp at 10-sample resolution) | The first sub-frame's energy is the geometric mean (dB midpoint) of previous and current; its LSPs are the Hz midpoint; ramp knots are at the sub-frame centres |
 | `x08_voicing_and_state.py` | Voicing bit patterns, determinism, start-up, extreme indices, all 128 pitch indices | Observations that remain open questions (voicing rule, start-up state, out-of-range LSPs); every pitch index decodes periodic |
+| `x09_post_filter_fit.py` | Fits the post-filter exponents with the full envelope chain; the energy constant | `beta` 0.2-0.35 with `gamma` 0.3-0.7 (best 0.275 at 0.6, 0.74 dB rms); the energy offset |
+| `x10_w0_interpolation.py` | Harmonic-comb pitch of sub-frame a after voiced and unvoiced frames; start-up | `w0` midpoint if the previous sub-frame was voiced, current `w0` otherwise |
 
 `c2sim` facts (I-3) were checked by hand, not scripted: `c2sim <raw> -o <out> --modelout <file>` writes one
 1300-byte record per 10 ms analysis frame (`float32 w0`, `int32 L`, `float32 A[161]`, `float32 phi[161]`,
