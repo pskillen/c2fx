@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The c2fx Authors
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gcc:
+    name: Host GCC
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test
+        run: make test CC=gcc
+
+  clang:
+    name: Host Clang
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Clang
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang
+      - name: Test
+        run: make test CC=clang
+
+  sanitize:
+    name: Sanitizers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: AddressSanitizer and UBSan
+        run: make sanitize CC=gcc
+
+  arm:
+    name: Arm cross
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache Arm GNU Toolchain 13.3.Rel1
+        id: arm-toolchain
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi
+          key: arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi
+      - name: Download Arm GNU Toolchain 13.3.Rel1
+        if: steps.arm-toolchain.outputs.cache-hit != 'true'
+        run: |
+          set -eu
+          url="https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz"
+          curl -fsSL -A c2fx-ci -o "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz" "$url"
+          tar -C "$RUNNER_TEMP" -xf "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
+          rm -f "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
+      - name: Cross build, size, and no-float
+        run: |
+          set -eu
+          prefix="$RUNNER_TEMP/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-"
+          make cross-arm ARM_PREFIX="$prefix"
+          tools/size_report.sh arm
+          tools/check_no_float.sh build/arm "$prefix"
+
+  csky:
+    name: C-SKY
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cross build
+        env:
+          C2FX_CSKY_IMAGE: ${{ vars.C2FX_CSKY_IMAGE }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if [ -z "${C2FX_CSKY_IMAGE}" ]; then
+            echo "::notice::C-SKY cross build skipped: repository variable C2FX_CSKY_IMAGE is not set"
+            exit 0
+          fi
+          registry=${C2FX_CSKY_IMAGE%%/*}
+          case $registry in
+            *.*)
+              printf '%s\n' "$REGISTRY_TOKEN" | docker login "$registry" --username "$REGISTRY_USER" --password-stdin
+              ;;
+          esac
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src "$C2FX_CSKY_IMAGE" \
+            sh -c 'make cross-csky CSKY_PREFIX=csky-elf- && make cross-csky CSKY_PREFIX=csky-elf- CSKY_DSP=1 && tools/size_report.sh csky && tools/check_no_float.sh build/csky csky-elf-'
+
+  reuse:
+    name: REUSE
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: reuse lint
+        run: pipx run reuse lint
