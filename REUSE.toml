@@ -4,6 +4,12 @@
 version = 1
 
 [[annotations]]
+path = "LICENSE"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 The c2fx Authors"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
 path = "vectors/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 The c2fx Authors"

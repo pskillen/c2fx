@@ -11,8 +11,8 @@
 # ARM_PREFIX and CSKY_PREFIX are the cross tool prefixes, including the
 # trailing hyphen.
 
-ARM_PREFIX ?= $(HOME)/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
-CSKY_PREFIX ?= $(HOME)/toolchains/csky-elf/bin/csky-elf-
+ARM_PREFIX ?= arm-none-eabi-
+CSKY_PREFIX ?= csky-elf-
 
 CC ?= gcc
 AR ?= ar

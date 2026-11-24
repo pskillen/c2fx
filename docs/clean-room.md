@@ -22,7 +22,7 @@ The specification for a half of the codec is reviewed and merged before implemen
 
 Do not open, search, or read:
 
-- Upstream Codec 2 source (`.c`, `.h` and build files), wherever it is checked out or built
+- Upstream Codec 2 source (`.c`, `.h` and build files), wherever it is checked out or built, except as the source-reader role allows
 - The `dm32-m17` firmware (GPL-3.0) and its codec
 - The earlier fixed-point Codec 2 kernels in the owner's `baofeng-dm32-firmware` repository (LGPL-derived)
 - OpenRTX
