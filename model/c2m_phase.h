@@ -26,4 +26,9 @@ double c2m_advance_excitation(double phi1, double w0, int voiced);
 /* Uniform phase on (-pi, pi) from the decoder's xorshift state. */
 double c2m_random_phase(uint32_t *state);
 
+/* OQ-5 noise-floor rule is not applied. A non-NULL hook returns 1 when
+ * harmonic m (1..L) should take a random phase anyway.
+ */
+typedef int (*c2m_noise_floor_fn)(int harmonic, double amp, double peak, void *user);
+
 #endif

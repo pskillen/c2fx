@@ -4,7 +4,7 @@
 #ifndef C2M_DECODE_H
 #define C2M_DECODE_H
 
-#include "c2m_quant.h"
+#include "c2m_phase.h"
 
 /* Spec 3.1: bit 0 voices sub-frame a and bit 1 voices sub-frame b. */
 #define C2M_VOICING_BIT_PER_SUBFRAME 1
@@ -29,6 +29,12 @@ typedef struct c2m_decode {
     double prev_f0_hz;
     double prev_energy_db;
     double prev_lsp_hz[C2M_LSP_ORDER];
+    /* Excitation phase of harmonic 1. Initial phase is 0 (spec 4). */
+    double phi1;
+    uint32_t rng;
+    double ola[C2M_HOP];
+    c2m_noise_floor_fn noise_floor;
+    void *noise_floor_user;
 } c2m_decode;
 
 void c2m_decode_init(c2m_decode *st);
