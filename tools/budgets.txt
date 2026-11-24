@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The c2fx Authors
+
+# Flash budgets in bytes of text + data (code and constants, not bss).
+# decoder_objs and encoder_objs name objects under build/<target>/.
+# Both lists are empty until those objects exist.
+
+# DM-1701
+arm.radio = DM-1701
+arm.total = 14336
+arm.decoder = 9216
+arm.decoder_objs =
+arm.encoder_objs =
+
+# DM-32UV
+csky.radio = DM-32UV
+csky.total = 16384
+csky.decoder_objs =
+csky.encoder_objs =
