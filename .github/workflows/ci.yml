@@ -41,9 +41,6 @@ jobs:
   arm:
     name: Arm cross
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      actions: write
     steps:
       - uses: actions/checkout@v7
       - name: Cache Arm GNU Toolchain 13.3.Rel1
@@ -56,10 +53,12 @@ jobs:
         if: steps.arm-toolchain.outputs.cache-hit != 'true'
         run: |
           set -eu
-          url="https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz"
-          curl -fsSL -A c2fx-ci -o "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz" "$url"
-          tar -C "$RUNNER_TEMP" -xf "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
-          rm -f "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
+          tarball=arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
+          url="https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/${tarball}"
+          curl -fsSL -A c2fx-ci -o "$RUNNER_TEMP/$tarball" "$url"
+          printf '%s\n' '95c011cee430e64dd6087c75c800f04b9c49832cc1000127a92a97f9c8d83af4  '"$RUNNER_TEMP/$tarball" | sha256sum -c -
+          tar -C "$RUNNER_TEMP" -xf "$RUNNER_TEMP/$tarball"
+          rm -f "$RUNNER_TEMP/$tarball"
       - name: Cross build, size, and no-float
         run: |
           set -eu
@@ -102,4 +101,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: reuse lint
-        run: pipx run reuse lint
+        run: pipx run reuse==6.3.0 lint
