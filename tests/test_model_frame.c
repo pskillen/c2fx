@@ -219,9 +219,15 @@ static int test_interpolate(void)
     }
     if (near("startup energy a", sub[0].energy_db, 0.5 * energy_20, 1e-12) != 0 ||
         near("startup energy b", sub[1].energy_db, energy_20, 1e-12) != 0 ||
-        near("startup w0 a", sub[0].w0, low.w0, 0.0) != 0 ||
-        near("startup lsp a", sub[0].lsp_hz[9], low.lsp_hz[9], 0.0) != 0) {
+        near("startup w0 a", sub[0].w0, low.w0, 0.0) != 0) {
         return 1;
+    }
+    for (int j = 0; j < C2M_LSP_ORDER; j++) {
+        double startup_hz = (double)j * C2M_FS_HZ / 22.0;
+
+        if (near("startup lsp a", sub[0].lsp_hz[j], 0.5 * (startup_hz + low.lsp_hz[j]), 1e-12) != 0) {
+            return 1;
+        }
     }
 
     set_indices(&idx, 1, 1, 127, 0, 10);
@@ -229,12 +235,17 @@ static int test_interpolate(void)
     c2m_decode_frame(&st, &idx, sub);
     if (near("voiced w0 a", sub[0].w0, 0.5 * (low.w0 + high.w0), 1e-12) != 0 ||
         near("voiced energy a", sub[0].energy_db, 0.5 * energy_20, 1e-12) != 0 ||
-        near("voiced lsp a", sub[0].lsp_hz[0], 0.5 * (low.lsp_hz[0] + high.lsp_hz[0]), 1e-12) != 0 ||
         near("voiced w0 b", sub[1].w0, high.w0, 0.0) != 0) {
         return 1;
     }
+    for (int j = 0; j < C2M_LSP_ORDER; j++) {
+        if (near("voiced lsp a", sub[0].lsp_hz[j],
+                 0.5 * (low.lsp_hz[j] + high.lsp_hz[j]), 1e-12) != 0) {
+            return 1;
+        }
+    }
 
-    /* Previous b is voiced, this b is not: do not blend w0. */
+    /* Previous b voiced, sub-frame a voiced, b unvoiced: blend w0 on a only. */
     set_indices(&idx, 1, 0, 40, 10, 0);
     c2m_dequant(&idx, &low);
     c2m_decode_frame(&st, &idx, sub);
@@ -242,12 +253,25 @@ static int test_interpolate(void)
         fprintf(stderr, "mixed voicing is %d,%d\n", sub[0].voiced, sub[1].voiced);
         return 1;
     }
-    if (near("unvoiced w0 a", sub[0].w0, low.w0, 0.0) != 0 ||
-        near("unvoiced w0 b", sub[1].w0, low.w0, 0.0) != 0) {
+    if (near("voiced-a unvoiced-b w0 a", sub[0].w0, 0.5 * (high.w0 + low.w0), 1e-12) != 0 ||
+        near("voiced-a unvoiced-b w0 b", sub[1].w0, low.w0, 0.0) != 0) {
+        return 1;
+    }
+
+    /* Previous b voiced, sub-frame a unvoiced: copy current w0. */
+    set_indices(&idx, 0, 1, 60, 10, 0);
+    c2m_dequant(&idx, &low);
+    c2m_decode_frame(&st, &idx, sub);
+    if (sub[0].voiced != 0 || sub[1].voiced != 1) {
+        fprintf(stderr, "unvoiced-a voicing is %d,%d\n", sub[0].voiced, sub[1].voiced);
+        return 1;
+    }
+    if (near("unvoiced-a w0 a", sub[0].w0, low.w0, 0.0) != 0 ||
+        near("unvoiced-a w0 b", sub[1].w0, low.w0, 0.0) != 0) {
         return 1;
     }
     if (fabs(sub[0].w0 - 0.5 * (high.w0 + low.w0)) < 1e-6) {
-        fprintf(stderr, "unvoiced w0 a blended\n");
+        fprintf(stderr, "unvoiced-a w0 a blended\n");
         return 1;
     }
     return 0;
@@ -330,19 +354,44 @@ static int test_lpc_envelope(void)
     }
 
     c2m_envelope_sample(a, c2m_w0_rad(36), params.energy_db, NULL, NULL, &env);
-    if (env.amp[0] != 0.0) {
-        fprintf(stderr, "harmonic 1 present at index 36 (%.6f)\n", env.amp[0]);
+    if (near("harmonic 1 index 36", env.amp[0], 23.040314451689593, 1e-4) != 0) {
         return 1;
     }
     c2m_envelope_sample(a, c2m_w0_rad(37), params.energy_db, NULL, NULL, &env);
-    if (!(env.amp[0] > 0.0)) {
-        fprintf(stderr, "harmonic 1 absent at index 37\n");
+    if (near("harmonic 1 index 37", env.amp[0], 757.98825258019747, 1e-3) != 0) {
         return 1;
     }
+    {
+        double w0_150 = C2M_PI * 150.0 / 4000.0;
+        double amp_unscaled;
+
+        c2m_envelope_sample(a, w0_150 + 1e-12, params.energy_db, NULL, NULL, &env);
+        amp_unscaled = env.amp[0];
+        c2m_envelope_sample(a, w0_150 - 1e-12, params.energy_db, NULL, NULL, &env);
+        if (near("harmonic 1 below 150 Hz", env.amp[0], C2M_HARM1_SCALE * amp_unscaled, 1e-4) != 0) {
+            return 1;
+        }
+        c2m_envelope_sample(a, w0_150, params.energy_db, NULL, NULL, &env);
+        if (near("harmonic 1 at 150 Hz", env.amp[0], amp_unscaled, 1e-4) != 0) {
+            return 1;
+        }
+    }
     c2m_envelope_sample(a, c2m_w0_rad(0), params.energy_db, NULL, NULL, &env);
-    if (env.count != 80 || env.amp[0] != 0.0 || !(env.amp[1] > 0.0)) {
+    if (env.count != 80 ||
+        near("50 Hz harmonic 1", env.amp[0], 13.413120615348399, 1e-3) != 0 ||
+        !(env.amp[1] > 0.0)) {
         fprintf(stderr, "50 Hz envelope count %d amp0 %.6g amp1 %.6g\n",
                 env.count, env.amp[0], env.amp[1]);
+        return 1;
+    }
+
+    c2m_envelope_sample(a, c2m_w0_rad(100), params.energy_db, NULL, NULL, &env);
+    sum_sq = 0.0;
+    for (int m = 0; m < env.count; m++) {
+        sum_sq += env.amp[m] * env.amp[m];
+    }
+    if (env.count != 12 || near("high pitch band sum", sum_sq, 2838537.490375671, 0.5) != 0) {
+        fprintf(stderr, "index 100 envelope L %d sum %.12f\n", env.count, sum_sq);
         return 1;
     }
 
@@ -352,6 +401,28 @@ static int test_lpc_envelope(void)
             fprintf(stderr, "post-filter hook was not applied at harmonic %d\n", m + 1);
             return 1;
         }
+    }
+    return 0;
+}
+
+static int test_lsp_group_order(void)
+{
+    c2m_indices idx;
+    c2m_params params;
+
+    idx.v_a = 1;
+    idx.v_b = 1;
+    idx.i = 55;
+    idx.e = 10;
+    for (int j = 0; j < C2M_LSP_ORDER; j++) {
+        idx.d[j] = j;
+    }
+    c2m_dequant(&idx, &params);
+    /* d[j]=j: ten distinct indices; group j uses table row j. */
+    if (near("ordered lsp 0", params.lsp_hz[0], 25.0, 0.0) != 0 ||
+        near("ordered lsp 5", params.lsp_hz[5], 525.0, 0.0) != 0 ||
+        near("ordered lsp 9", params.lsp_hz[9], 1375.0, 0.0) != 0) {
+        return 1;
     }
     return 0;
 }
@@ -379,7 +450,7 @@ int main(void)
 {
     if (test_gray() != 0 || test_random() != 0 || test_example() != 0 ||
         test_dequant() != 0 || test_interpolate() != 0 || test_lpc_envelope() != 0 ||
-        test_pack_rejects() != 0) {
+        test_lsp_group_order() != 0 || test_pack_rejects() != 0) {
         return 1;
     }
     return 0;
