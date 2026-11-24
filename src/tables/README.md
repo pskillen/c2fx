@@ -12,7 +12,7 @@ These are the only tracked files whose numeric content comes from the Codec 2 pr
 From the repository root, with the black-box kit on `C2FX_BLACKBOX`:
 
 ```sh
-export C2FX_BLACKBOX=~/build/c2-blackbox   # example; do not commit this path
+export C2FX_BLACKBOX=/path/to/c2-blackbox
 python3 tools/import_tables.py
 python3 tools/import_tables.py --check
 ```
