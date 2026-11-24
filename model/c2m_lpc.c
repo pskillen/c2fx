@@ -120,7 +120,7 @@ void c2m_envelope_sample(
     double sum_filtered = 0.0;
     double offset_db;
     double gain;
-    int drop_h1;
+    int scale_h1;
     int count;
 
     for (int m = 0; m < C2M_MAX_HARMONICS; m++) {
@@ -158,13 +158,10 @@ void c2m_envelope_sample(
     shape(a, C2M_LPC_ORDER, power, C2M_SPECTRUM_BINS, shaped, shape_user);
 
     spacing = w0 * (double)C2M_DFT_SIZE / (2.0 * C2M_PI);
-    drop_h1 = w0 < (2.0 * C2M_PI * C2M_HARM1_MIN_HZ / C2M_FS_HZ);
+    scale_h1 = w0 < C2M_HARM1_W0_MAX;
     for (int m = 1; m <= count; m++) {
         raw[m - 1] = band_power(power, m, spacing);
         filtered[m - 1] = band_power(shaped, m, spacing);
-        if (m == 1 && drop_h1) {
-            continue;
-        }
         sum_raw += raw[m - 1];
         sum_filtered += filtered[m - 1];
     }
@@ -181,15 +178,16 @@ void c2m_envelope_sample(
     }
     for (int m = 1; m <= count; m++) {
         double p;
+        double amp;
 
-        if (m == 1 && drop_h1) {
-            env->amp[0] = 0.0;
-            continue;
-        }
         p = gain * filtered[m - 1];
         if (p < 0.0) {
             p = 0.0;
         }
-        env->amp[m - 1] = sqrt(p);
+        amp = sqrt(p);
+        if (m == 1 && scale_h1) {
+            amp *= C2M_HARM1_SCALE;
+        }
+        env->amp[m - 1] = amp;
     }
 }

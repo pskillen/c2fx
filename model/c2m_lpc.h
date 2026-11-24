@@ -8,9 +8,9 @@
 
 #define C2M_LPC_ORDER C2M_LSP_ORDER
 
-/* Spec 6.1 recommends 512 while OQ-6 is open. */
+/* Spec 6.1: FFT_ENC 512, 256 power bins 0..255. */
 #define C2M_DFT_SIZE 512
-#define C2M_SPECTRUM_BINS (C2M_DFT_SIZE / 2 + 1)
+#define C2M_SPECTRUM_BINS 256
 
 /* L at 50 Hz is 80. The w0 quantizer does not go below that. */
 #define C2M_MAX_HARMONICS 80
@@ -18,10 +18,11 @@
 /* Spec 6.3. Accurate to about 1 dB (OQ-4); this is the stated constant. */
 #define C2M_LEVEL_OFFSET_DB 28.8
 
-/* Spec 6.4: skip harmonic 1 when w0 is below 2*pi*150/8000. */
-#define C2M_HARM1_MIN_HZ 150.0
+/* Spec 6.4: scale harmonic 1 when w0 < pi*150/4000 rad (strict). */
+#define C2M_HARM1_W0_MAX (C2M_PI * 150.0 / 4000.0)
+#define C2M_HARM1_SCALE 0.032
 
-/* power has C2M_SPECTRUM_BINS samples, bin 0 through Nyquist.
+/* power has C2M_SPECTRUM_BINS samples, bins 0..255.
  * provisional: spec OQ-3. The envelope calls this and uses its power as B'.
  * c2m_spectrum_identity leaves the spectrum unchanged.
  */
