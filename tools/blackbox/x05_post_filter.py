@@ -17,27 +17,28 @@ import c2bb as b
 NF = 512
 
 
-def bins(a, gamma=1.0):
-    return b.aresp(a, np.arange(NF // 2) * b.FS / NF, gamma)
+def bins(a, gamma=1.0, nf=NF):
+    return b.aresp(a, np.arange(nf // 2) * b.FS / nf, gamma)
 
 
-def predict(f, f0, L, gamma, beta, bass, norm, samp):
+def predict(f, f0, L, gamma, beta, bass, norm, samp, nf=NF):
     a = b.lsp_to_lpc(f)
-    H2 = 1 / np.abs(bins(a)) ** 2
-    P = H2 * (np.abs(bins(a, gamma)) / np.abs(bins(a))) ** (2 * beta)
-    k = np.arange(NF // 2)
-    step = np.where(k < 64, 10 ** 0.3, 1.0)     # bin 64 = 1000 Hz
+    H2 = 1 / np.abs(bins(a, 1.0, nf)) ** 2
+    P = H2 * (np.abs(bins(a, gamma, nf)) / np.abs(bins(a, 1.0, nf))) ** (2 * beta)
+    k = np.arange(nf // 2)
+    step = np.where(k * b.FS / nf < 1000, 10 ** 0.3, 1.0)
     if bass == "pre":
         P = P * step
     if norm:
         P = P * H2.sum() / P.sum()
     if bass == "post":
         P = P * step
-    r = f0 * NF / b.FS
+    r = f0 * nf / b.FS
     out = []
     for m in range(1, L + 1):
         lo, hi = int(np.floor((m - 0.5) * r + 0.5)), int(np.floor((m + 0.5) * r + 0.5))
-        out.append(P[lo:hi].sum() if samp == "band" else P[int(np.floor(m * r + 0.5))] * r)
+        hi = max(hi, lo + 1)
+        out.append(P[lo:hi].sum() if samp == "band" else P[min(int(np.floor(m * r + 0.5)), nf // 2 - 1)] * r)
     return 10 * np.log10(np.array(out))
 
 
@@ -61,7 +62,7 @@ def main():
             data.append((f, f0, L, amp))
 
     def score(**kw):
-        errs, offs = [], []
+        errs, offs = [], []   # offs: per-frame constant (dB) between measured and predicted
         for f, f0, L, amp in data:
             s = 1 if f0 < 150 else 0
             e = (20 * np.log10(amp + 1e-9) - predict(f, f0, L, **kw))[s:]
@@ -79,6 +80,10 @@ def main():
     for r in res[:10]:
         print("  score %.2f | shape-rms %.2f const %.2f offset-sd %.2f | gamma %.1f beta %.2f bass %s norm %s samp %s" % ((r[0], r[1][0], r[1][1], r[1][2]) + r[2:]))
     print("  no post filter at all (beta 0, no bass, no norm, band):", score(gamma=0.5, beta=0.0, bass="none", norm=False, samp="band"))
+
+    print("C. envelope DFT size: shape rms, mean offset, offset sd (dB) for gamma .5 beta .2 bass post norm, band sum")
+    for nf in (128, 256, 512, 1024, 2048):
+        print("  N_dft", nf, np.round(score(gamma=0.5, beta=0.2, bass="post", norm=True, samp="band", nf=nf), 2))
 
 
 if __name__ == "__main__":
