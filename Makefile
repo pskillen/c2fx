@@ -67,8 +67,14 @@ sanitize:
 cross-arm:
 	$(MAKE) archive BUILD=build/arm CC='$(ARM_PREFIX)gcc' AR='$(ARM_PREFIX)ar' EXTRA_CFLAGS='$(ARM_CFLAGS)'
 
+ifeq ($(CSKY_DSP),1)
+CSKY_BUILD := build/csky-dsp
+else
+CSKY_BUILD := build/csky
+endif
+
 cross-csky:
-	$(MAKE) archive BUILD=build/csky CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
+	$(MAKE) archive BUILD=$(CSKY_BUILD) CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
 
 clean:
 	rm -rf build

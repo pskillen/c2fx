@@ -2,19 +2,21 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The c2fx Authors
 
-# size_report.sh <target>
+# size_report.sh <target> [size-tool]
 # Prints text+data for each object in build/<target> and exits non-zero
 # when that sum, or a listed decoder sum, is over tools/budgets.txt.
+# size-tool defaults to size (pass arm-none-eabi-size or csky-elf-size in CI).
 
 set -eu
 export LC_ALL=C
 
-if [ "$#" -ne 1 ]; then
-    echo "usage: tools/size_report.sh <target>" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "usage: tools/size_report.sh <target> [size-tool]" >&2
     exit 2
 fi
 
 target=$1
+size_tool=${2:-size}
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 budgets=$script_dir/budgets.txt
@@ -47,7 +49,7 @@ budget_get() {
 }
 
 object_bytes() {
-    size "$1" | awk 'NR == 2 { printf "%d\n", $1 + $2 }'
+    "$size_tool" "$1" | awk 'NR == 2 { printf "%d\n", $1 + $2 }'
 }
 
 if ! total_budget=$(budget_get "${target}.total"); then

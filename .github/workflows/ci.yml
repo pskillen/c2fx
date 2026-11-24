@@ -65,7 +65,7 @@ jobs:
           set -eu
           prefix="$RUNNER_TEMP/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-"
           make cross-arm ARM_PREFIX="$prefix"
-          tools/size_report.sh arm
+          tools/size_report.sh arm "${prefix}size"
           tools/check_no_float.sh build/arm "$prefix"
 
   csky:
@@ -94,7 +94,7 @@ jobs:
               ;;
           esac
           docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src "$C2FX_CSKY_IMAGE" \
-            sh -c 'make cross-csky CSKY_PREFIX=csky-elf- && make cross-csky CSKY_PREFIX=csky-elf- CSKY_DSP=1 && tools/size_report.sh csky && tools/check_no_float.sh build/csky csky-elf-'
+            sh -c 'make cross-csky CSKY_PREFIX=csky-elf- && make cross-csky CSKY_PREFIX=csky-elf- CSKY_DSP=1 && tools/size_report.sh csky csky-elf-size && tools/check_no_float.sh build/csky csky-elf- && tools/size_report.sh csky-dsp csky-elf-size && tools/check_no_float.sh build/csky-dsp csky-elf-'
 
   reuse:
     name: REUSE
