@@ -26,11 +26,11 @@ Paths not yet in the tree are planned.
 | `src/dsp/` (planned) | This library's own FFT and trigonometry, left out when a host supplies them |
 | `src/arch/armv7em/`, `src/arch/csky/` (planned) | Architecture-specific kernels |
 | `src/tables/` | Generated quantizer tables (`c2_3200_tab.c`) |
-| `model/` (planned) | Floating-point oracle, for the host only, never linked into a product build |
+| `model/` | Floating-point oracle, for the host only, never linked into a product build |
 | `tests/` | Host tests |
-| `vectors/` (planned) | Committed test vectors |
+| `vectors/` | Committed test vectors |
 | `tools/` | Scripts for vectors, tables, size, and symbol checks |
-| `docs/spec/` (planned) | Algorithm specification |
+| `docs/spec/` | Algorithm specification |
 | `docs/clean-room.md` | Clean-room roles and the reading log |
 
 ## Build and test
