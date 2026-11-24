@@ -26,7 +26,6 @@ void c2m_lsp_hz_to_rad(const double hz[C2M_LSP_ORDER], double rad[C2M_LSP_ORDER]
 void c2m_lsp_accept(double lsp_hz[C2M_LSP_ORDER])
 {
 #if C2M_LSP_KEEP_RAW_SUM
-    /* provisional: spec OQ-8 */
     (void)lsp_hz;
 #else
 #error "C2M_LSP_KEEP_RAW_SUM is the only LSP range rule implemented"

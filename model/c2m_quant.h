@@ -12,9 +12,7 @@
 /* 50/32, the spec 3.3 energy step. Index 0 is 0 dB on this scale. */
 #define C2M_ENERGY_STEP_DB (50.0 / 32.0)
 
-/* provisional: spec OQ-8
- * 1 keeps the LSP running sum, including sums above 4 kHz and unordered pairs.
- */
+/* Spec 3.4 / OQ-8: keep the LSP running sum unchanged. */
 #define C2M_LSP_KEEP_RAW_SUM 1
 
 typedef struct c2m_params {
@@ -31,7 +29,6 @@ double c2m_w0_rad(int index);
 
 void c2m_lsp_hz_to_rad(const double hz[C2M_LSP_ORDER], double rad[C2M_LSP_ORDER]);
 
-/* provisional: spec OQ-8 */
 void c2m_lsp_accept(double lsp_hz[C2M_LSP_ORDER]);
 
 /* idx must be in the ranges c2m_frame_unpack produces. */

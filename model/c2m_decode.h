@@ -6,15 +6,10 @@
 
 #include "c2m_quant.h"
 
-/* provisional: spec OQ-1
- * 1: bit 0 voices sub-frame a and bit 1 voices sub-frame b.
- */
+/* Spec 3.1: bit 0 voices sub-frame a and bit 1 voices sub-frame b. */
 #define C2M_VOICING_BIT_PER_SUBFRAME 1
 
-/* provisional: spec OQ-2
- * 1: average w0 only when previous b and this b are both voiced.
- * Otherwise sub-frame a copies this frame's w0.
- */
+/* Spec 4 w0 rule: midpoint only when previous b and sub-frame a are voiced. */
 #define C2M_W0_COPY_UNLESS_BOTH_VOICED 1
 
 typedef struct c2m_subframe {
