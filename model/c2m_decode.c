@@ -11,7 +11,8 @@ void c2m_decode_init(c2m_decode *st)
     st->prev_w0 = c2m_w0_rad(0);
     st->prev_energy_db = 0.0;
     for (int j = 0; j < C2M_LSP_ORDER; j++) {
-        st->prev_lsp_hz[j] = 0.0;
+        /* Spec 4 start-up: previous LSP i = i*pi/11 rad. */
+        st->prev_lsp_hz[j] = (double)j * C2M_FS_HZ / 22.0;
     }
 }
 
@@ -29,20 +30,15 @@ void c2m_decode_frame(c2m_decode *st, const c2m_indices *idx, c2m_subframe out[2
     c2m_dequant(idx, &cur);
 
     if (!st->has_prev) {
-        /* provisional: spec OQ-7
-         * No previous b. Energy starts at the bottom step, so sub-frame a
-         * is halfway down. Voicing starts unvoiced, so w0 is not blended.
-         * LSPs start at this frame, so the envelope is not pulled toward 0 Hz.
-         */
+        /* Spec 4 start-up: previous voiced 0, energy index 0; LSPs stay at i*pi/11. */
         st->prev_voiced = 0;
         st->prev_energy_db = 0.0;
         st->prev_f0_hz = cur.f0_hz;
         st->prev_w0 = cur.w0;
-        copy_lsp(cur.lsp_hz, st->prev_lsp_hz);
     }
 
 #if C2M_VOICING_BIT_PER_SUBFRAME
-    /* provisional: spec OQ-1 */
+    /* Spec 3.1: one voicing bit per sub-frame [src: codec2.c @ 310777b]. */
     out[0].voiced = idx->v_a;
     out[1].voiced = idx->v_b;
 #else
@@ -62,8 +58,8 @@ void c2m_decode_frame(c2m_decode *st, const c2m_indices *idx, c2m_subframe out[2
     c2m_lsp_hz_to_rad(out[0].lsp_hz, out[0].lsp_rad);
 
 #if C2M_W0_COPY_UNLESS_BOTH_VOICED
-    /* provisional: spec OQ-2 */
-    if (st->prev_voiced && idx->v_b) {
+    /* Spec 4: midpoint w0 when previous b and sub-frame a are both voiced. */
+    if (st->prev_voiced && idx->v_a) {
         out[0].f0_hz = 0.5 * (st->prev_f0_hz + cur.f0_hz);
         out[0].w0 = 0.5 * (st->prev_w0 + cur.w0);
     } else {
