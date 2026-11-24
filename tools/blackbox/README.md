@@ -14,7 +14,7 @@ tag. Nothing generated is committed.
 - Scratch: `C2FX_WORK` (default `./work`). Generated files go there, and only there.
 - Python 3 with **numpy** (and nothing else): `python3 -m venv venv && venv/bin/pip install numpy`.
 - Run one: `C2FX_WORK=/tmp/c2 python3 x02_pitch_field.py`. Run all: `./run_all.sh venv/bin/python`.
-  The whole suite takes about a minute.
+  The whole suite takes a few minutes.
 
 `c2bb.py` is the shared helper (run the tools, pack frames, Gray code, textbook LSP to LPC, harmonic
 measurement). It is analysis code for experiments, not library code, and the implementation must not copy it:
@@ -38,7 +38,7 @@ the spec states every formula it uses.
 | `x12_energy_quant.py` | Amplitude sweep, silence, full scale, loud/quiet blocks | Energy index is the nearest step of (10 log10 E + 10) * 32/50 on that same 10 ms frame; non-positive E is index 0 |
 | `x13_lsp_quant.py` | Closed-loop versus open-loop search on pulses, noise, a low sine, and the synthesized voice files | LSP indices are nearest-Hz differences off the quantized running sum; a target below 25 Hz takes index 0 |
 | `x14_corpus_fields.py` | Every PCM file under `tests/data`, all four field rules, both voicing bits | All 2260 frames match; the even 10 ms row does not |
-| `x15_analysis_window.py` | Impulses, a pulse-train vowel, a 20 Hz sine, against an order-10 LPC gain | 279-point Hann window centred at sample (s-1)*80, sum of squares 1/512; the sine does not follow this gain |
+| `x15_analysis_window.py` | Impulses, a pulse-train vowel, a 20 Hz sine, against an order-10 LPC gain | 279-point Hann window centred at sample (s-1)*80, sum of squares 1/512; per-file table of the gain through the energy quantizer: matches speech, noise, silence, DC and the clipped sine, not the unclipped tones or the chirp |
 | `x16_pitch_behaviour.py` | Pulse trains from 55 to 600 Hz, and pure tones from 50 to 400 Hz | Pulse trains inside 50-400 Hz track; pure tones do not come back at the tone frequency |
 | `x17_voicing_bits.py` | Noise, pulses, and an 180 Hz tone plus noise at several SNRs | Bit 0 and bit 1 are the two 10 ms voicing flags; the mixture does not switch at 6 dB |
 | `x18_energy_crosslink.py` | The quantized energies in `vectors/*_params.csv` against `10^((-10 + e*50/32)/10)`; the decoder's level offset; refit with the offset fixed | `E_MIN_DB` = -10 dB, `E_MAX_DB` = 40 dB; synthesis gain 6.38 dB (best pair) or 5.91 dB (PDF pair), about a factor 2 |

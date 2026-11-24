@@ -63,6 +63,21 @@ def main():
         tot2 += (n, w, e, lsp_ok, v)
     print(f"{'from frame 2':<28} {int(tot2[0]):5d} {int(tot2[1]):5d} {int(tot2[2]):5d} {int(tot2[3]):5d} {int(tot2[4]):6d}")
 
+    print("\nsilence and DC: what the analysis reports and which indices are written")
+    for name in ("silence.pcm", "dc_8000.pcm"):
+        pcm = np.fromfile(os.path.join(ROOT, "tests", "data", "signals", name), dtype="<i2")
+        frames, pitch, _lsp = b.analyse(pcm)
+        def where(key):
+            out = {}
+            for k, f in enumerate(frames):
+                out.setdefault(f[key], []).append(k)
+            return {v: (ks if len(ks) <= 3 else f"{len(ks)} frames from {ks[0]}") for v, ks in sorted(out.items())}
+        hz = sorted({round(row[0] * b.FS / (2 * np.pi), 2) for row in pitch})
+        print(f"  {name}: analysis pitch values (Hz) {hz}; w0 index -> frames {where('w')}; "
+              f"energy index -> frames {where('e')}; analysis energies (min, max) "
+              f"{min(r[3] for r in pitch):.4g}, {max(r[3] for r in pitch):.4g}")
+
+
 
 if __name__ == "__main__":
     main()

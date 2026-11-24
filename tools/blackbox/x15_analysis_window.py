@@ -127,5 +127,39 @@ def main():
         print(f"  r[0] * {scale:<6}  gain {gain_limited(1.0, scale):.3f}")
 
 
+def per_file():
+    """The G^2 of the window above, through the energy quantizer, against the index c2enc writes (frame 2k+1)."""
+    import os
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    print("\nG^2 of this window through the energy quantizer, against the index written, per test file")
+    print(f"{'file':<28} {'frames':>6} {'exact':>6} {'within1':>8}  dumped E vs G^2 on frame 20 (or the last)")
+    tot = ex_t = w1_t = 0
+    for folder in ("voice", "signals"):
+        d = os.path.join(root, "tests", "data", folder)
+        for name in sorted(os.listdir(d)):
+            if not name.endswith(".pcm"):
+                continue
+            pcm = np.fromfile(os.path.join(d, name), dtype="<i2")
+            frames, pitch, _lsp = b.analyse(pcm)
+            ex = w1 = n = 0
+            for k, fr in enumerate(frames):
+                s = 2 * k + 1
+                if s >= len(pitch):
+                    break
+                g = gain_at(pcm.astype(float), (s - 1) * 80)
+                got = b.quant_energy(g)
+                ex += got == fr["e"]
+                w1 += abs(got - fr["e"]) <= 1
+                n += 1
+            s = min(41, len(pitch) - 1)
+            g = gain_at(pcm.astype(float), (s - 1) * 80)
+            print(f"{name:<28} {n:6d} {ex:6d} {w1:8d}  {pitch[s][3]:.4g} vs {g:.4g}")
+            tot += n
+            ex_t += ex
+            w1_t += w1
+    print(f"{'ALL':<28} {tot:6d} {ex_t:6d} {w1_t:8d}  ({100.0 * w1_t / tot:.0f}% within 1)")
+
+
 if __name__ == "__main__":
     main()
+    per_file()

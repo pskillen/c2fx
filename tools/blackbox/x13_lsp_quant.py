@@ -29,6 +29,8 @@ def score(pcm, skip=2):
     frames, _pitch, lsp = b.analyse(pcm)
     closed = open_ = 0
     below = below_ok = 0
+    below_t = []
+    above = 0
     near = near_ok = 0
     n = 0
     for k in range(skip, len(frames) - 1):
@@ -46,12 +48,15 @@ def score(pcm, skip=2):
             if target < table[0]:
                 below += 1
                 below_ok += got[j] == 0
+                below_t.append(target)
+            if target > table[-1]:
+                above += 1
             if dist[order[1]] - dist[order[0]] < 0.05:
                 near += 1
                 near_ok += got[j] == int(order[0])
             acc += float(table[got[j]])
         n += 1
-    return n, closed, open_, below, below_ok, near, near_ok
+    return n, closed, open_, below, below_ok, near, near_ok, below_t, above
 
 
 def main():
@@ -67,9 +72,17 @@ def main():
     for name in ("high_voice", "low_voice", "test_transmission"):
         path = os.path.join(ROOT, "tests", "data", "voice", name + ".pcm")
         signals.append((name, np.fromfile(path, dtype="<i2")))
+    all_below, all_above, tot_near, tot_ok = [], 0, 0, 0
     for name, pcm in signals:
-        n, closed, open_, below, below_ok, near, near_ok = score(pcm)
+        n, closed, open_, below, below_ok, near, near_ok, bt, above = score(pcm)
         print(f"{name:<22} {n:4d} {closed:7d} {open_:6d} {below:6d} {below_ok:8d} {near:8d} {near_ok:7d}")
+        all_below += bt
+        all_above += above
+        tot_near += near
+        tot_ok += near_ok
+    print(f"targets below the first table entry (25 Hz): {len(all_below)}, from {min(all_below):.2f} to {max(all_below):.2f} Hz; "
+          f"of those with target < 5 Hz: {sum(t < 5 for t in all_below)}; targets above the last entry: {all_above}")
+    print(f"targets within 0.05 Hz of equal distance to two entries, all signals: {tot_near}, took the nearer entry: {tot_ok}")
 
 
 if __name__ == "__main__":
