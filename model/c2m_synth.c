@@ -105,11 +105,64 @@ static int16_t sat_round(double x)
     return (int16_t)round(x);
 }
 
+static void write_silence(c2m_decode *st, int16_t out[C2M_FRAME_SAMPLES])
+{
+    for (int n = 0; n < C2M_FRAME_SAMPLES; n++) {
+        out[n] = 0;
+    }
+    for (int n = 0; n < C2M_HOP; n++) {
+        st->ola[n] = 0.0;
+    }
+}
+
+/* After the repeat limit, the next good frame fades in on the start-up path. */
+static void restore_startup(c2m_decode *st)
+{
+    uint32_t rng = st->rng;
+
+    c2m_decode_init(st);
+    st->rng = rng;
+}
+
+static const c2m_indices *lost_frame(c2m_decode *st, c2m_indices *rep)
+{
+    int energy;
+
+    st->lost_run += 1;
+    if (!st->has_prev || st->lost_run > C2M_LOST_MAX_FRAMES) {
+        return NULL;
+    }
+    energy = st->prev_e - C2M_LOST_ENERGY_STEPS;
+    if (energy < 0) {
+        energy = 0;
+    }
+    rep->v_a = st->prev_voiced;
+    rep->v_b = st->prev_voiced;
+    rep->i = st->prev_i;
+    rep->e = energy;
+    for (int j = 0; j < C2M_LSP_ORDER; j++) {
+        rep->d[j] = st->prev_d[j];
+    }
+    return rep;
+}
+
 void c2m_decode_pcm(c2m_decode *st, const c2m_indices *idx, int16_t out[C2M_FRAME_SAMPLES])
 {
     c2m_subframe sub[2];
+    c2m_indices repeated;
     double block[C2M_FRAME_SAMPLES];
     double hop[C2M_HOP];
+
+    if (idx == NULL) {
+        idx = lost_frame(st, &repeated);
+        if (idx == NULL) {
+            write_silence(st, out);
+            restore_startup(st);
+            return;
+        }
+    } else {
+        st->lost_run = 0;
+    }
 
     c2m_decode_frame(st, idx, sub);
     for (int s = 0; s < 2; s++) {

@@ -29,6 +29,10 @@ typedef struct c2m_decode {
     double prev_f0_hz;
     double prev_energy_db;
     double prev_lsp_hz[C2M_LSP_ORDER];
+    int prev_i;
+    int prev_e;
+    int prev_d[C2M_LSP_ORDER];
+    int lost_run;
     /* Excitation phase of harmonic 1. Initial phase is 0 (spec 4). */
     double phi1;
     uint32_t rng;
