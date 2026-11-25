@@ -5,6 +5,12 @@
 
 #include <math.h>
 
+/* [c2fx design] Bias so floor(pi/w0) does not fall short on exact integers. */
+#define C2M_HARMONIC_COUNT_BIAS 1e-9
+
+/* [c2fx design] Floor on |A(e^jw)|^2 before inversion and post-filter ratios. */
+#define C2M_LPC_MAG2_FLOOR 1e-30
+
 int c2m_harmonic_count(double w0)
 {
     double ratio;
@@ -17,7 +23,7 @@ int c2m_harmonic_count(double w0)
     if (ratio > (double)C2M_MAX_HARMONICS) {
         return C2M_MAX_HARMONICS;
     }
-    return (int)floor(ratio + 1e-9);
+    return (int)floor(ratio + C2M_HARMONIC_COUNT_BIAS);
 }
 
 static void mul_quadratic(double *poly, int *order, double c1)
@@ -80,8 +86,8 @@ static void eval_lpc(const double a[], double gamma, double angle, double *mag2)
         gk *= gamma;
     }
     *mag2 = re * re + im * im;
-    if (*mag2 < 1e-30) {
-        *mag2 = 1e-30;
+    if (*mag2 < C2M_LPC_MAG2_FLOOR) {
+        *mag2 = C2M_LPC_MAG2_FLOOR;
     }
 }
 

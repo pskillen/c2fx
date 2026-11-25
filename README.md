@@ -41,12 +41,13 @@ GNU make, a C99 compiler, and binutils (`size` and `nm`).
 make
 make test
 make sanitize
+make wav
 make cross-arm
 make cross-csky
 make cross-csky CSKY_DSP=1
 ```
 
-`make` writes `build/host/libc2fx.a`. `make test` builds that archive and runs the host tests. `make sanitize` runs the same tests with `-fsanitize=address,undefined`.
+`make` writes `build/host/libc2fx.a`. `make test` builds that archive and runs the host tests. `make sanitize` runs the same tests with `-fsanitize=address,undefined`. `make wav` builds `build/c2m_dec` and writes 8 kHz mono PCM under `build/wav/` for each committed vector bitstream.
 
 `make cross-arm` writes `build/arm/libc2fx.a` for Cortex-M4, Thumb, soft-float (`-mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Os -ffunction-sections -fdata-sections`). `make cross-csky` writes `build/csky/libc2fx.a` for CK803S (`-mcpu=ck803s -Os -ffunction-sections -fdata-sections`). `CSKY_DSP=1` adds `-Wa,-mdsp` and writes `build/csky-dsp/libc2fx.a`.
 

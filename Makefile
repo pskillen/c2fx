@@ -3,12 +3,13 @@
 
 # Host archive:         make
 # Host tests:           make test
+# Decode vectors WAV:   make wav
 # ASan and UBSan:       make sanitize
 # Cortex-M4 soft-float: make cross-arm
 # CK803S:               make cross-csky
 # CK803S with DSP asm:  make cross-csky CSKY_DSP=1
 #
-# model/ is the host float oracle. It is built by `make test` only.
+# model/ is the host float oracle. `make test` and `make wav` build it.
 # The archive and the cross builds do not contain it.
 #
 # ARM_PREFIX and CSKY_PREFIX are the cross tool prefixes, including the

@@ -62,6 +62,7 @@ The maintainer builds upstream at that commit outside every repository and gives
 | 2026-11-25 | spec writer | Spec writer | E11: `x10_w0_interpolation.py`: pitch of sub-frame a after voiced and unvoiced frames; start-up | `w0` interpolation; initial state | n/a (no source read) | c2-3200.md rev 3 |
 | 2026-11-25 | spec writer | Spec writer | E12: `x07_interpolation.py` part C: 10-sample ramp resolution | Synthesis window shape | n/a (no source read) | c2-3200.md rev 3 |
 | 2026-11-25 | P3a implementer | Implementer | This repository's `docs/spec/c2-3200.md` revision 3 (sections 1–6 and 9), `src/tables/`, and `vectors/`. No upstream source | Float-model front half: frame, dequantizers, interpolation, LSP to LPC, harmonic envelope | n/a (no source read) | c2-3200.md rev 3 |
+| 2026-11-24 | P3b implementer | Implementer | This repository's `docs/spec/c2-3200.md` revision 4 (sections 4–9 and the defaults), `model/`, and `vectors/`. No upstream source | Float-model back half: post filter and level, phase, synthesis, lost frames | n/a (no source read) | c2-3200.md rev 4 |
 | 2026-11-24 | spec writer | Spec writer | S5: same `doc/codec2.pdf` as S1, re-read for the encoder (sections 2.4, 2.5, 3.1-3.5, 3.7), nothing copied | Pitch, voicing, LPC, LSP, energy, window, decimation | n/a (no source read) | c2-3200.md rev 4 |
 | 2026-11-24 | spec writer | Spec writer | E13: `x11_w0_quant.py` | w0 index from the analysis pitch; which 10 ms row | n/a (no source read) | c2-3200.md rev 4 |
 | 2026-11-24 | spec writer | Spec writer | E14: `x12_energy_quant.py` | Energy index; low clip; which 10 ms row | n/a (no source read) | c2-3200.md rev 4 |
@@ -72,7 +73,6 @@ The maintainer builds upstream at that commit outside every repository and gives
 | 2026-11-24 | spec writer | Spec writer | E19: `x17_voicing_bits.py` | Voicing bits are the two flags; tone-plus-noise table | n/a (no source read) | c2-3200.md rev 4 |
 | 2026-11-24 | spec writer | Spec writer | L2: No further literature was opened. The thesis, the MBE paper and the LSP papers cited by the PDF were not read | Section 10.2 rests on the PDF and on E13-E19 | n/a (no source read) | c2-3200.md rev 4 |
 | 2026-11-25 | spec writer | Spec writer | E20: `x18_energy_crosslink.py`: the energies of the committed vectors against the -10 dB scale; encoder scale against the decoder level offset | `E_MIN_DB`, `E_MAX_DB` and synthesis gain | n/a (no source read) | c2-3200.md rev 4 |
-| 2026-11-24 | P3b implementer | Implementer | This repository's `docs/spec/c2-3200.md` revision 4 (sections 4–9 and the defaults), `model/`, and `vectors/`. No upstream source | Float-model back half: post filter and level, phase, synthesis, lost frames | n/a (no source read) | c2-3200.md rev 4 |
 
 ## Open questions
 
