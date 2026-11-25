@@ -222,6 +222,52 @@ static int edge_rows(void)
     return failed;
 }
 
+static int hann_symmetry(void)
+{
+    int16_t x[C2FX_ANALYSIS_LEN];
+    struct c2fx_enc_scratch scratch;
+    c2fx_enc_row row;
+
+    for (int j = 0; j < C2FX_ANALYSIS_LEN; j++) {
+        x[j] = -32767;
+    }
+    c2fx_lpc_analyze(x, &row, &scratch);
+    for (int j = 0; j < C2FX_ANALYSIS_CENTER; j++) {
+        int mirror = C2FX_ANALYSIS_LEN - 1 - j;
+
+        if (scratch.windowed[j] != scratch.windowed[mirror]) {
+            fprintf(stderr, "Hann symmetry: x[%d] and x[%d] window to %d and %d\n",
+                    j, mirror, scratch.windowed[j], scratch.windowed[mirror]);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int reflection_cap(void)
+{
+    const int64_t one = INT64_C(1) << 52;
+
+    for (int sign = -1; sign <= 1; sign += 2) {
+        /* Apply the model's order-one equations to a direct lag pair.
+         * The unconstrained |r[1]/r[0]| = 1 - 2^-21 exceeds the cap.
+         */
+        int64_t r[] = {one, sign * (one - (one >> 21))};
+        int64_t a[2] = {0};
+        uint64_t energy = c2fx_levinson_q52(r, a, 1);
+        double rho = (double)a[1] / (double)one;
+        double model_energy = 1.0 - C2M_LPC_RHO_MAX * C2M_LPC_RHO_MAX;
+
+        if (fabs(rho + sign * C2M_LPC_RHO_MAX) > 1.0 / (double)one ||
+            fabs((double)energy / (double)one - model_energy) > 2e-15) {
+            fprintf(stderr, "reflection cap: lag sign %d gives rho %.9f and energy %.9g\n",
+                    sign, rho, (double)energy / (double)one);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int quantizer_boundaries(void)
 {
     c2fx_enc_row row = {0};
@@ -263,6 +309,8 @@ int main(void)
     int failed = quantizer_boundaries();
 
     failed |= edge_rows();
+    failed |= hann_symmetry();
+    failed |= reflection_cap();
     failed |= run_group("tests/data/voice/*.pcm", &pooled);
     failed |= run_group("tests/data/signals/*.pcm", &pooled);
     if (pooled.rows != 0) {

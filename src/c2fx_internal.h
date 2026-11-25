@@ -28,6 +28,14 @@ typedef struct c2fx_enc_row {
  */
 void c2fx_lpc_analyze(const int16_t x[C2FX_ANALYSIS_LEN],
                       c2fx_enc_row *row, struct c2fx_enc_scratch *s);
+
+/* Levinson recursion on corrected, normalized lags with 0 < r[0] < 2^53
+ * and |r[k]| <= r[0]. Order is 1..C2FX_LSP_ORDER. Both buffers have
+ * order + 1 entries, and a[1..order] start at zero. Returns the residual
+ * in the lag scale and writes the LPC coefficients in Q52.
+ */
+uint64_t c2fx_levinson_q52(const int64_t *r, int64_t *a, int order);
+
 int c2fx_quant_energy_index(const c2fx_enc_row *row);
 void c2fx_quant_lsp_indices(const c2fx_enc_row *row, int d[C2FX_LSP_ORDER]);
 

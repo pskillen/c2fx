@@ -76,11 +76,11 @@ static inline int32_t c2fx_mulshr_bias_floor(int32_t a, int32_t b, int s)
 static inline uint32_t c2fx_mulshr_round(int32_t a, int32_t b, int s)
 {
     int64_t p = (int64_t)a * b;
-    uint64_t mag = (uint64_t)(p < 0 ? -p : p);
-    uint64_t bias = UINT64_C(1) << (s - 1);
-    uint32_t rounded = (uint32_t)((mag + bias) >> s);
+    int64_t bias = INT64_C(1) << (s - 1);
 
-    return p < 0 ? 0u - rounded : rounded;
+    /* On a negative tie, bias one less so the floor rounds away from zero. */
+    p += bias - (p < 0);
+    return (uint32_t)((uint64_t)p >> s);
 }
 
 /* (x * c) >> s for a 16-bit factor c, 0 <= s <= 16. Two 32-bit products.
