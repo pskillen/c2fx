@@ -4,6 +4,7 @@
 # Host archive:         make
 # Host tests:           make test
 # Decode vectors WAV:   make wav
+# Encode test PCM:      make enc
 # ASan and UBSan:       make sanitize
 # Cortex-M4 soft-float: make cross-arm
 # CK803S:               make cross-csky
@@ -11,6 +12,10 @@
 #
 # model/ is the host float oracle. `make test` and `make wav` build it.
 # The archive and the cross builds do not contain it.
+#
+# build/c2m_enc <in.pcm> <out.c2> encodes one file: int16 LE, 8 kHz, mono, a
+# whole number of 160-sample frames. `make enc` runs it on every test voice and
+# signal file and writes build/enc/<set>.c2. build/c2m_dec is the reverse.
 #
 # ARM_PREFIX and CSKY_PREFIX are the cross tool prefixes, including the
 # trailing hyphen.
