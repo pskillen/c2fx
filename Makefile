@@ -33,7 +33,8 @@ MODEL_SRCS := model/c2m_frame.c model/c2m_quant.c model/c2m_decode.c model/c2m_l
 	model/c2m_phase.c model/c2m_synth.c
 MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
-SRCS := src/c2fx_version.c $(wildcard src/tables/*.c)
+SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c) \
+	src/c2fx_frame.c src/c2fx_quant.c src/c2fx_lpc.c src/c2fx_envelope.c
 OBJS := $(SRCS:src/%.c=$(BUILD)/%.o)
 
 ARM_CFLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Os -ffunction-sections -fdata-sections
@@ -65,12 +66,17 @@ $(BUILD)/tables/%.o: src/tables/%.c src/tables/%.h include/c2fx.h $(BUILD)/cflag
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
 
-$(BUILD)/%.o: src/%.c include/c2fx.h $(BUILD)/cflags.stamp
+$(BUILD)/dsp/%.o: src/dsp/%.c src/dsp/c2fx_dsp.h src/dsp/c2fx_fxp.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc/dsp -c $< -o $@
+
+$(BUILD)/%.o: src/%.c include/c2fx.h src/c2fx_internal.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc -Isrc/dsp -c $< -o $@
 
 test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
-		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec
+		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec \
+		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope
 	$(BUILD)/test_version
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
@@ -78,6 +84,9 @@ test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUI
 	$(BUILD)/test_model_envelope
 	$(BUILD)/test_model_synth
 	$(BUILD)/test_model_vs_c2dec
+	$(BUILD)/test_dsp
+	$(BUILD)/test_fx_frame
+	$(BUILD)/test_fx_envelope
 
 $(BUILD)/model/%.o: model/%.c $(wildcard model/*.h) src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
@@ -110,6 +119,18 @@ $(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h $(
 $(BUILD)/test_tables: tests/test_tables.c $(BUILD)/libc2fx.a src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
+
+$(BUILD)/test_dsp: tests/test_dsp.c $(BUILD)/libc2fx.a src/dsp/c2fx_dsp.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) -Isrc/dsp $< $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_fx_frame: tests/test_fx_frame.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc -Isrc/dsp $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 sanitize:
 	$(MAKE) test BUILD=build/sanitize EXTRA_CFLAGS='-fsanitize=address,undefined'

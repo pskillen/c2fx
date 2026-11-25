@@ -362,6 +362,74 @@ static int test_power_floor(void)
     return 0;
 }
 
+/* Integer trunc of (m±0.5)*w0/r + 0.5. Grid scale is (128+7*i)/40.
+ * A midpoint of indices i0 and i1 has scale (256+7*(i0+i1))/80.
+ */
+static int exact_edge(int numer, int key, int midpoint)
+{
+    int num = midpoint ? 256 + 7 * key : 128 + 7 * key;
+    int div = midpoint ? 160 : 80;
+    int edge = (numer * num + div / 2) / div;
+
+    if (edge < 0) {
+        return 0;
+    }
+    if (edge > C2M_SPECTRUM_BINS) {
+        return C2M_SPECTRUM_BINS;
+    }
+    return edge;
+}
+
+static int edges_match(double w0, int harmonic, int key, int midpoint)
+{
+    int lo;
+    int hi;
+    int expect_lo = exact_edge(2 * harmonic - 1, key, midpoint);
+    int expect_hi = exact_edge(2 * harmonic + 1, key, midpoint);
+
+    c2m_band_edges(w0, harmonic, &lo, &hi);
+    if (lo == expect_lo && hi == expect_hi) {
+        return 1;
+    }
+    if (midpoint) {
+        fprintf(stderr, "band edge midpoint key %d harmonic %d lo %d/%d hi %d/%d\n", key, harmonic,
+                lo, expect_lo, hi, expect_hi);
+    } else {
+        fprintf(stderr, "band edge index %d harmonic %d lo %d/%d hi %d/%d\n", key, harmonic, lo,
+                expect_lo, hi, expect_hi);
+    }
+    return 0;
+}
+
+static int test_band_edges(void)
+{
+    for (int i = 0; i < 128; i++) {
+        double w0 = c2m_w0_rad(i);
+        int count = c2m_harmonic_count(w0);
+
+        for (int m = 1; m <= count; m++) {
+            if (!edges_match(w0, m, i, 0)) {
+                return 1;
+            }
+        }
+    }
+    for (int i0 = 0; i0 < 128; i0++) {
+        for (int i1 = 0; i1 < 128; i1++) {
+            double w0 = 0.5 * (c2m_w0_rad(i0) + c2m_w0_rad(i1));
+            int key = i0 + i1;
+            int count = c2m_harmonic_count(w0);
+
+            for (int m = 1; m <= count; m++) {
+                if (!edges_match(w0, m, key, 1)) {
+                    return 1;
+                }
+            }
+        }
+    }
+    printf("band edges: 128 grid indices and every midpoint pair match the integer edge\n");
+    return 0;
+}
+
 static int test_energy_grid(void)
 {
     const char *dir = "vectors";
@@ -411,7 +479,7 @@ static int test_energy_grid(void)
 int main(void)
 {
     if (test_rescale() != 0 || test_bass_boost() != 0 || test_postfilter_beta() != 0 ||
-        test_power_floor() != 0 || test_energy_grid() != 0) {
+        test_power_floor() != 0 || test_band_edges() != 0 || test_energy_grid() != 0) {
         return 1;
     }
     return 0;

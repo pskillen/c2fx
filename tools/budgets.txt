@@ -3,13 +3,13 @@
 
 # Flash budgets in bytes of text + data (code and constants, not bss).
 # decoder_objs and encoder_objs name objects under build/<target>/.
-# Both lists are empty until those objects exist.
+# encoder_objs stays empty until the encoder exists; arm.decoder_objs is live.
 
 # DM-1701
 arm.radio = DM-1701
 arm.total = 14336
 arm.decoder = 9216
-arm.decoder_objs =
+arm.decoder_objs = dsp/c2fx_fft.o dsp/c2fx_math.o dsp/c2fx_tables.o tables/c2_3200_tab.o c2fx_frame.o c2fx_quant.o c2fx_lpc.o c2fx_envelope.o
 arm.encoder_objs =
 
 # DM-32UV
