@@ -8,9 +8,6 @@
 /* [c2fx design] Bias so floor(pi/w0) does not fall short on exact integers. */
 #define C2M_HARMONIC_COUNT_BIAS 1e-9
 
-/* [c2fx design] Floor on |A(e^jw)|^2 before inversion and post-filter ratios. */
-#define C2M_LPC_MAG2_FLOOR 1e-30
-
 int c2m_harmonic_count(double w0)
 {
     double ratio;
@@ -86,9 +83,6 @@ static void eval_lpc(const double a[], double gamma, double angle, double *mag2)
         gk *= gamma;
     }
     *mag2 = re * re + im * im;
-    if (*mag2 < C2M_LPC_MAG2_FLOOR) {
-        *mag2 = C2M_LPC_MAG2_FLOOR;
-    }
 }
 
 void c2m_lpc_power(const double a[C2M_LPC_ORDER + 1], double power[C2M_SPECTRUM_BINS])
@@ -98,7 +92,7 @@ void c2m_lpc_power(const double a[C2M_LPC_ORDER + 1], double power[C2M_SPECTRUM_
         double mag2;
 
         eval_lpc(a, 1.0, angle, &mag2);
-        power[bin] = 1.0 / mag2;
+        power[bin] = 1.0 / (mag2 + C2M_POWER_FLOOR);
     }
 }
 
@@ -116,8 +110,8 @@ void c2m_postfilter_power(
 
         eval_lpc(a, 1.0, angle, &mag2);
         eval_lpc(a, C2M_PF_GAMMA, angle, &mag2_g);
-        /* |A(z/gamma) / A(z)|^(2*beta) = (mag2_g / mag2)^beta. */
-        ratio = pow(mag2_g / mag2, C2M_PF_BETA);
+        /* |A(z/gamma) / A(z)|^(2*beta); floor only on the |A(z)|^2 denominator. */
+        ratio = pow(mag2_g / (mag2 + C2M_POWER_FLOOR), C2M_PF_BETA);
         out[bin] = power[bin] * ratio;
     }
 }

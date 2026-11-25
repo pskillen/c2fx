@@ -309,6 +309,59 @@ static int check_set(const char *dir, const char *c2_name, double *worst)
     return 0;
 }
 
+static double lpc_mag2(const double a[C2M_LPC_ORDER + 1], int bin)
+{
+    double angle = 2.0 * C2M_PI * (double)bin / (double)C2M_DFT_SIZE;
+    double re = 0.0;
+    double im = 0.0;
+
+    for (int k = 0; k <= C2M_LPC_ORDER; k++) {
+        double phase = angle * (double)k;
+
+        re += a[k] * cos(phase);
+        im -= a[k] * sin(phase);
+    }
+    return re * re + im * im;
+}
+
+static int test_power_floor(void)
+{
+    double lsp_hz[C2M_LSP_ORDER] = {
+        175.0, 200.0, 225.0, 250.0, 275.0, 300.0, 325.0, 350.0, 375.0, 400.0
+    };
+    double lsp_rad[C2M_LSP_ORDER];
+    double a[C2M_LPC_ORDER + 1];
+    double power[C2M_SPECTRUM_BINS];
+    int peak_bin = 0;
+    double peak = 0.0;
+    double mag2;
+    double expect;
+    double rel;
+
+    c2m_lsp_hz_to_rad(lsp_hz, lsp_rad);
+    c2m_lsp_to_lpc(lsp_rad, a);
+    c2m_lpc_power(a, power);
+    for (int bin = 0; bin < C2M_SPECTRUM_BINS; bin++) {
+        if (power[bin] > peak) {
+            peak = power[bin];
+            peak_bin = bin;
+        }
+    }
+    /* Spec 6.2 uses eps = 1e-6; compare to that limit even if the macro changes. */
+    if (!(peak < 1e6)) {
+        fprintf(stderr, "power floor peak %.6e at bin %d\n", peak, peak_bin);
+        return 1;
+    }
+    mag2 = lpc_mag2(a, peak_bin);
+    expect = 1.0 / (mag2 + C2M_POWER_FLOOR);
+    rel = fabs(peak - expect) / expect;
+    if (!(rel < 1e-9)) {
+        fprintf(stderr, "power floor peak rel %.3e (got %.6e expect %.6e)\n", rel, peak, expect);
+        return 1;
+    }
+    return 0;
+}
+
 static int test_energy_grid(void)
 {
     const char *dir = "vectors";
@@ -358,7 +411,7 @@ static int test_energy_grid(void)
 int main(void)
 {
     if (test_rescale() != 0 || test_bass_boost() != 0 || test_postfilter_beta() != 0 ||
-        test_energy_grid() != 0) {
+        test_power_floor() != 0 || test_energy_grid() != 0) {
         return 1;
     }
     return 0;
