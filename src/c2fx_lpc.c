@@ -7,11 +7,60 @@
 
 #include "c2fx_internal.h"
 
-#include "c2fx_dsp.h"
-#include "c2fx_fxp.h"
-
 #define LPC_Q 27
 #define LPC_ONE (1 << LPC_Q)
+
+/* sin(z * pi/2 / 2^30) in Q30, for z in 0..2^30. Horner form of the Taylor
+ * series through theta^13:
+ *   sin/theta = 1 - t/6*(1 - t/20*(1 - t/42*(1 - t/72*(1 - t/110*(1 - t/156)))))
+ * with t = theta^2. The truncation error is about 2e-9.
+ * c2fx_cos is not used here. It is Q15 and about one LSB low, and the
+ * product truncates toward -infinity. On equally spaced LSPs (silence)
+ * P and Q cancel to a residual near 2e-4; that LSB moves the DC bin, the
+ * bin dominates both power sums, and every harmonic comes out 0.22 dB high.
+ */
+static int32_t sin_quadrant_q30(uint32_t z)
+{
+    const uint64_t pi_q30 = 3373259426ull;
+    uint64_t th = ((uint64_t)z * pi_q30) >> 31;
+    uint64_t th2 = (th * th) >> 30;
+    uint64_t s = (1ull << 30) - th2 / 156ull;
+
+    s = (1ull << 30) - (th2 * s) / (110ull << 30);
+    s = (1ull << 30) - (th2 * s) / (72ull << 30);
+    s = (1ull << 30) - (th2 * s) / (42ull << 30);
+    s = (1ull << 30) - (th2 * s) / (20ull << 30);
+    s = (1ull << 30) - (th2 * s) / (6ull << 30);
+    return (int32_t)((th * s) >> 30);
+}
+
+/* cos(phase), 2^32 = one turn, Q30. */
+static int32_t cos_q30(uint32_t phase)
+{
+    uint32_t quad = phase >> 30;
+    uint32_t z = phase & 0x3fffffffu;
+    int32_t mag;
+
+    if ((quad & 1u) == 0u) {
+        mag = sin_quadrant_q30((1u << 30) - z);
+    } else {
+        mag = sin_quadrant_q30(z);
+    }
+    if (quad == 1u || quad == 2u) {
+        return -mag;
+    }
+    return mag;
+}
+
+/* (coeff * -2*cos) with cos in Q30. The shift is logical; the result fits
+ * in int32 because |coeff| was scaled to 2^27 and |-2*cos| <= 2.
+ */
+static int32_t mul_cos(int32_t coeff, int32_t cos_q30)
+{
+    int64_t c1 = -(int64_t)cos_q30 * 2;
+
+    return (int32_t)(uint32_t)((uint64_t)((int64_t)coeff * c1) >> 30);
+}
 
 static uint32_t iabs32(int32_t x)
 {
@@ -38,8 +87,8 @@ static void scale_down(int32_t *poly, int n, int *q)
             peak = a;
         }
     }
-    /* |c1| <= 2, so the next coefficient is at most 4 * peak. Keep that
-     * under 2^29 so two polynomials can still be added in int32.
+    /* |-2*cos| <= 2, so the next coefficient is at most 4 * peak. Keep
+     * that under 2^29 so two polynomials can still be added in int32.
      */
     while (peak > (1u << 27)) {
         for (int i = 0; i <= n; i++) {
@@ -50,8 +99,8 @@ static void scale_down(int32_t *poly, int n, int *q)
     }
 }
 
-/* poly *= (1 + c1 * z^-1 + z^-2). c1 is Q15 and holds the true -2*cos. */
-static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t c1_q15)
+/* poly *= (1 - 2*cos*z^-1 + z^-2). cos_q30 is Q30. */
+static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t cos_q30)
 {
     int n = *order;
     int32_t next[C2FX_LSP_ORDER + 3];
@@ -61,10 +110,8 @@ static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t c1_q15)
         next[i] = 0;
     }
     for (int i = 0; i <= n; i++) {
-        int32_t step = c2fx_mulshr(poly[i], c1_q15, 15);
-
         next[i] += poly[i];
-        next[i + 1] += step;
+        next[i + 1] += mul_cos(poly[i], cos_q30);
         next[i + 2] += poly[i];
     }
     *order = n + 2;
@@ -132,14 +179,10 @@ void c2fx_lsp_to_lpc(
     }
 
     for (int j = 0; j < C2FX_LSP_ORDER; j += 2) {
-        int32_t cos_q15 = c2fx_cos(phase_from_q1(lsp_q1[j]));
-
-        mul_quadratic(p, &p_order, &p_q, -(cos_q15 << 1));
+        mul_quadratic(p, &p_order, &p_q, cos_q30(phase_from_q1(lsp_q1[j])));
     }
     for (int j = 1; j < C2FX_LSP_ORDER; j += 2) {
-        int32_t cos_q15 = c2fx_cos(phase_from_q1(lsp_q1[j]));
-
-        mul_quadratic(q, &q_order, &q_q, -(cos_q15 << 1));
+        mul_quadratic(q, &q_order, &q_q, cos_q30(phase_from_q1(lsp_q1[j])));
     }
 
     if (p_q > q_q) {
