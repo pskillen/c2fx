@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The c2fx Authors
+# Decoder CRC-32 of little-endian PCM. Regenerate with make crc.
+chirp_80_400hz.c2 100 35f6f837
+dc_8000.c2 100 c4c7e03f
+high_voice.c2 309 5ddd0fa6
+low_voice.c2 307 5390ee7e
+noise_xorshift.c2 100 9518e2ce
+silence.c2 100 70ca653c
+sine_100hz.c2 100 cbf945bf
+sine_150hz.c2 100 c9ca8de6
+sine_200hz.c2 100 97238515
+sine_200hz_clipped.c2 100 06fdd0d8
+sine_300hz.c2 100 a221671c
+sine_400hz.c2 100 10fe84bc
+ten_second_countdown.c2 540 c8fcf308
+test_transmission.c2 104 237ace46

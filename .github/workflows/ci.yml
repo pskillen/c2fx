@@ -19,6 +19,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test
         run: make test CC=gcc
+      - name: External DSP archive
+        run: make archive EXTERNAL_DSP=1 CC=gcc
 
   clang:
     name: Host Clang

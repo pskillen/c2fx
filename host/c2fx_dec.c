@@ -3,27 +3,8 @@
 // Decode one .c2 bitstream to int16 little-endian PCM. A 7-byte header is
 // skipped when the file name ends in .c2 and the mode byte is 0x00.
 
+#include "c2_header.h"
 #include "c2fx.h"
-
-#include <stdio.h>
-#include <string.h>
-
-/* Spec 2.3. Present only when the file name ends in .c2, mode byte 0x00. */
-static const uint8_t c2_header[7] = {0xc0, 0xde, 0xc2, 0x01, 0x02, 0x00, 0x00};
-
-static int skip_header(FILE *in)
-{
-    uint8_t probe[7];
-    size_t n = fread(probe, 1, sizeof probe, in);
-
-    if (n == sizeof probe && memcmp(probe, c2_header, sizeof probe) == 0) {
-        return 0;
-    }
-    if (fseek(in, 0, SEEK_SET) != 0) {
-        return -1;
-    }
-    return 0;
-}
 
 static int write_frame(FILE *out, const int16_t *pcm)
 {
@@ -63,7 +44,7 @@ int main(int argc, char **argv)
         fclose(in);
         return 1;
     }
-    if (skip_header(in) != 0) {
+    if (c2fx_skip_header(in) != 0) {
         fprintf(stderr, "cannot rewind %s\n", argv[1]);
         fclose(in);
         fclose(out);

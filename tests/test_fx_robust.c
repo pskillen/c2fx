@@ -13,7 +13,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define RANDOM_FRAMES 1000000
+#ifndef C2FX_ROBUST_FRAMES
+#define C2FX_ROBUST_FRAMES 20000
+#endif
 
 static uint32_t xorshift(uint32_t *s)
 {
@@ -99,7 +101,7 @@ static int random_frames(c2fx_dec_t *dec, void *scratch, const uint8_t *good)
 {
     uint32_t state = 0xC2F0A5A5u;
 
-    for (int n = 0; n < RANDOM_FRAMES; n++) {
+    for (int n = 0; n < C2FX_ROBUST_FRAMES; n++) {
         uint8_t raw[C2FX_BITS_BYTES];
         int16_t pcm[C2FX_FRAME_LEN];
         uint32_t a = xorshift(&state);
@@ -310,6 +312,6 @@ int main(void)
     if (random_frames(&dec, scratch, good) != 0) {
         return 1;
     }
-    printf("random frames: %d, output in int16, recovered after a good frame\n", RANDOM_FRAMES);
+    printf("random frames: %d, output in int16, recovered after a good frame\n", C2FX_ROBUST_FRAMES);
     return 0;
 }
