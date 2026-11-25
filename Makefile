@@ -4,6 +4,7 @@
 # Host archive:         make
 # Host tests:           make test
 # Decode vectors WAV:   make wav
+# Fixed decoder WAV:    make wavfx
 # Encode test PCM:      make enc
 # ASan and UBSan:       make sanitize
 # Cortex-M4 soft-float: make cross-arm
@@ -16,6 +17,7 @@
 # build/c2m_enc <in.pcm> <out.c2> encodes one file: int16 LE, 8 kHz, mono, a
 # whole number of 160-sample frames. `make enc` runs it on every test voice and
 # signal file and writes build/enc/<set>.c2. build/c2m_dec is the reverse.
+# build/c2fx_dec is the fixed-point decoder; `make wavfx` writes build/wavfx/.
 #
 # ARM_PREFIX and CSKY_PREFIX are the cross tool prefixes, including the
 # trailing hyphen.
@@ -50,7 +52,7 @@ ifeq ($(CSKY_DSP),1)
 CSKY_CFLAGS += -Wa,-mdsp
 endif
 
-.PHONY: all archive test sanitize cross-arm cross-csky clean force wav enc
+.PHONY: all archive test sanitize cross-arm cross-csky clean force wav wavfx enc
 
 all: archive
 
@@ -194,6 +196,20 @@ enc: build/c2m_enc
 	for f in tests/data/voice/*.pcm tests/data/signals/*.pcm; do \
 		base=$$(basename "$$f" .pcm); \
 		build/c2m_enc "$$f" "build/enc/$$base.c2"; \
+	done
+
+build/c2fx_dec: host/c2fx_dec.c $(BUILD)/libc2fx.a include/c2fx.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
+
+wavfx: build/c2fx_dec
+	mkdir -p build/wavfx
+	@set -eu; \
+	for f in vectors/*.c2; do \
+		base=$$(basename "$$f" .c2); \
+		build/c2fx_dec "$$f" "build/wavfx/$$base.pcm"; \
+		python3 tools/pcm_to_wav.py "build/wavfx/$$base.pcm" "build/wavfx/$$base.wav"; \
+		rm -f "build/wavfx/$$base.pcm"; \
 	done
 
 wav: build/c2m_dec
