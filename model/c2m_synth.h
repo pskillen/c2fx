@@ -15,6 +15,9 @@
 /* Triangle window and overlap-add. block is 160 samples in window order. */
 void c2m_ola_hop(double ola[C2M_HOP], const double block[C2M_FRAME_SAMPLES], double out[C2M_HOP]);
 
+/* DFT bin of harmonic m. Round half up of the exact m * f0 / 15.625. */
+int c2m_harm_bin(int m, double w0);
+
 /* Synthesize one 160-sample block, before overlap-add, centered on block[80].
  * Advances st->phi1. Exposed so tests can measure harmonic phase; not part of the codec API.
  */

@@ -10,7 +10,7 @@ SPDX-FileCopyrightText = "2026 The c2fx Authors"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
-path = "vectors/**"
+path = ["vectors/**.c2", "vectors/**.pcm", "vectors/**.csv", "vectors/UPSTREAM"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 The c2fx Authors"
 SPDX-License-Identifier = "MIT"

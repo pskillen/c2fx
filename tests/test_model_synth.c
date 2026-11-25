@@ -484,15 +484,14 @@ static int test_harmonic_phase(void)
     c2m_lsp_to_lpc(sub[0].lsp_rad, a);
     c2m_lpc_power(a, power);
     c2m_min_phase(power, minphase);
-    bin1 = (int)floor(sub[0].w0 * (double)C2M_DFT_SIZE / (2.0 * C2M_PI) + 0.5);
+    bin1 = c2m_harm_bin(1, sub[0].w0);
     for (int blk = 0; blk < 12; blk++) {
         double ph1;
 
         c2m_synth_block(&st, &sub[0], block);
         ph1 = block_phase(block, bin1);
         for (int m = 2; m <= 6; m++) {
-            int bin = (int)floor((double)m * sub[0].w0 * (double)C2M_DFT_SIZE /
-                                 (2.0 * C2M_PI) + 0.5);
+            int bin = c2m_harm_bin(m, sub[0].w0);
             double got = wrap_pi(block_phase(block, bin) - (double)m * ph1);
             double expect = wrap_pi(minphase[bin] - (double)m * minphase[bin1]);
             double err = fabs(wrap_pi(got - expect));
@@ -510,9 +509,67 @@ static int test_harmonic_phase(void)
     return 0;
 }
 
+/* Round half up of m * f0 / 15.625. Grid f0 = (6400 + 350*i) / 128,
+ * so the bin is m * (6400 + 350*i) / 2000. A midpoint of two indices is
+ * m * (12800 + 350*(i_prev + i_cur)) / 4000.
+ */
+static int exact_harm_bin(int m, int key, int midpoint)
+{
+    if (midpoint) {
+        return (m * (12800 + 350 * key) + 2000) / 4000;
+    }
+    return (m * (6400 + 350 * key) + 1000) / 2000;
+}
+
+static int harm_bin_matches(double w0, int m, int key, int midpoint)
+{
+    int got = c2m_harm_bin(m, w0);
+    int expect = exact_harm_bin(m, key, midpoint);
+
+    if (got == expect) {
+        return 1;
+    }
+    if (midpoint) {
+        fprintf(stderr, "harm bin midpoint key %d m %d got %d expect %d\n", key, m, got, expect);
+    } else {
+        fprintf(stderr, "harm bin index %d m %d got %d expect %d\n", key, m, got, expect);
+    }
+    return 0;
+}
+
+static int test_harm_bins(void)
+{
+    for (int i = 0; i < 128; i++) {
+        double w0 = c2m_w0_rad(i);
+        int count = c2m_harmonic_count(w0);
+
+        for (int m = 1; m <= count; m++) {
+            if (!harm_bin_matches(w0, m, i, 0)) {
+                return 1;
+            }
+        }
+    }
+    for (int i0 = 0; i0 < 128; i0++) {
+        for (int i1 = 0; i1 < 128; i1++) {
+            double w0 = 0.5 * (c2m_w0_rad(i0) + c2m_w0_rad(i1));
+            int key = i0 + i1;
+            int count = c2m_harmonic_count(w0);
+
+            for (int m = 1; m <= count; m++) {
+                if (!harm_bin_matches(w0, m, key, 1)) {
+                    return 1;
+                }
+            }
+        }
+    }
+    printf("harmonic bins: 128 grid indices and every midpoint pair match the integer bin\n");
+    return 0;
+}
+
 int main(void)
 {
-    if (test_min_phase_lpc() != 0 || test_phi1_scaling() != 0 || test_harmonic_phase() != 0 || test_periodic() != 0 ||
+    if (test_harm_bins() != 0 || test_min_phase_lpc() != 0 || test_phi1_scaling() != 0 ||
+        test_harmonic_phase() != 0 || test_periodic() != 0 ||
         test_voiced_rng_idle() != 0 || test_overlap_constant() != 0 || test_lost() != 0 ||
         test_saturation_rails() != 0 || test_lost_noise_floor_hook() != 0 || test_deterministic() != 0) {
         return 1;

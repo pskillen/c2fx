@@ -9,7 +9,7 @@
 arm.radio = DM-1701
 arm.total = 14336
 arm.decoder = 9216
-arm.decoder_objs = dsp/c2fx_fft.o dsp/c2fx_math.o dsp/c2fx_tables.o tables/c2_3200_tab.o c2fx_frame.o c2fx_quant.o c2fx_lpc.o c2fx_envelope.o
+arm.decoder_objs = dsp/c2fx_fft.o dsp/c2fx_math.o dsp/c2fx_tables.o dsp/c2fx_exp2_tab.o tables/c2_3200_tab.o c2fx_frame.o c2fx_quant.o c2fx_lpc.o c2fx_envelope.o c2fx_phase.o c2fx_synth.o c2fx_lost.o c2fx_decode.o
 arm.encoder_objs =
 
 # DM-32UV

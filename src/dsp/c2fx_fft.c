@@ -6,6 +6,9 @@
 // mbe_rfft / mbe_irfft at N = 256 (512 real samples).
 
 #include "c2fx_dsp.h"
+
+#ifndef C2FX_EXTERNAL_DSP
+
 #include "c2fx_fxp.h"
 
 #define FFT_N 256
@@ -174,3 +177,5 @@ void c2fx_rfft512(int32_t *buf)
         }
     }
 }
+
+#endif

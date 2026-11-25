@@ -8,8 +8,8 @@
 
 int main(void)
 {
-    if (strcmp(c2fx_version(), "0.0.0") != 0) {
-        fprintf(stderr, "version is \"%s\", expected 0.0.0\n", c2fx_version());
+    if (strcmp(c2fx_version(), "0.1.0") != 0) {
+        fprintf(stderr, "version is \"%s\", expected 0.1.0\n", c2fx_version());
         return 1;
     }
     if (C2FX_FRAME_LEN != 160) {

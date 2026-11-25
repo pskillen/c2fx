@@ -6,6 +6,10 @@
 
 #include "c2fx_dsp.h"
 
+#ifndef C2FX_EXTERNAL_DSP
+
+#include "c2fx_fxp.h"
+
 static int32_t sin_idx(uint32_t i)
 {
     uint32_t q = i & 255u;
@@ -73,14 +77,6 @@ int32_t c2fx_exp2_q11(int32_t x)
     return (int32_t)(m >> (14 - ip));
 }
 
-static int clz32(uint32_t x)
-{
-    if (x == 0u) {
-        return 32;
-    }
-    return __builtin_clz(x);
-}
-
 int32_t c2fx_log2_q11(uint32_t x)
 {
     int e;
@@ -93,7 +89,7 @@ int32_t c2fx_log2_q11(uint32_t x)
     if (x == 0u) {
         return -(64 << 11);
     }
-    e = 31 - clz32(x);
+    e = 31 - c2fx_clz32(x);
     if (e >= 16) {
         m = x >> (e - 16);
     } else {
@@ -107,3 +103,5 @@ int32_t c2fx_log2_q11(uint32_t x)
         (((uint32_t)(c2fx_log2_tab[i + 1] - c2fx_log2_tab[i]) * f) >> 10);
     return (e << 11) + (int32_t)(l >> 4);
 }
+
+#endif

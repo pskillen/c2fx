@@ -9,10 +9,78 @@
 
 #include <stdint.h>
 
+/* Leading-zero counts. All variants require x != 0. */
+#if !defined(__GNUC__) || defined(C2FX_TEST_PORTABLE_CLZ)
+static inline int c2fx_clz32_portable(uint32_t x)
+{
+    int count = 0;
+
+    while ((x & UINT32_C(0x80000000)) == 0u) {
+        x <<= 1;
+        count++;
+    }
+    return count;
+}
+
+static inline int c2fx_clz64_portable(uint64_t x)
+{
+    uint32_t hi = (uint32_t)(x >> 32);
+
+    if (hi != 0u) {
+        return c2fx_clz32_portable(hi);
+    }
+    return 32 + c2fx_clz32_portable((uint32_t)x);
+}
+#endif
+
+static inline int c2fx_clz32(uint32_t x)
+{
+#if defined(__GNUC__)
+    return __builtin_clz(x);
+#else
+    return c2fx_clz32_portable(x);
+#endif
+}
+
+static inline int c2fx_clz64(uint64_t x)
+{
+#if defined(__GNUC__)
+    return __builtin_clzll(x);
+#else
+    return c2fx_clz64_portable(x);
+#endif
+}
+
 /* (a * b) >> s, the low 32 bits of the shifted product. 0 <= s < 32. */
 static inline int32_t c2fx_mulshr(int32_t a, int32_t b, int s)
 {
     return (int32_t)(uint32_t)((uint64_t)((int64_t)a * b) >> s);
+}
+
+/* Bias the product away from zero by half a step, then floor the shift.
+ * An exact negative multiple becomes one count more negative.
+ * 1 <= s < 32, and the result must fit in int32_t.
+ */
+static inline int32_t c2fx_mulshr_bias_floor(int32_t a, int32_t b, int s)
+{
+    int64_t p = (int64_t)a * b;
+    int64_t bias = (int64_t)1 << (s - 1);
+
+    p += p < 0 ? -bias : bias;
+    return (int32_t)(uint32_t)((uint64_t)p >> s);
+}
+
+/* Shift the product to nearest, with ties away from zero. Return its
+ * low 32 bits for phase arithmetic. 1 <= s < 32.
+ */
+static inline uint32_t c2fx_mulshr_round(int32_t a, int32_t b, int s)
+{
+    int64_t p = (int64_t)a * b;
+    uint64_t mag = (uint64_t)(p < 0 ? -p : p);
+    uint64_t bias = UINT64_C(1) << (s - 1);
+    uint32_t rounded = (uint32_t)((mag + bias) >> s);
+
+    return p < 0 ? 0u - rounded : rounded;
 }
 
 /* (x * c) >> s for a 16-bit factor c, 0 <= s <= 16. Two 32-bit products.

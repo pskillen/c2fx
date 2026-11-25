@@ -12,6 +12,24 @@
 #define C2M_SAMPLE_MAX 32767.0
 #define C2M_SAMPLE_MIN (-32767.0)
 
+/* [c2fx design] Bias so floor(bin + 0.5) does not fall short on an exact
+ * half. On a quantizer w0 the unrounded bin is m*(128 + 7*i)/40 (a grid
+ * index) or m*(256 + 7*(i_prev + i_cur))/80 (a midpoint). A value that is
+ * not an exact half is therefore at least 1/80 from the next half. The
+ * double product stays within one ulp of that rational, about 1e-13, on
+ * either side. 1e-9 is larger than that error and far smaller than 1/80,
+ * so it cannot move a bin that is not tied. An exact half that the double
+ * rounds up already takes the half-up bin; the bias only repairs a shortfall.
+ */
+#define C2M_HARM_BIN_BIAS 1e-9
+
+int c2m_harm_bin(int m, double w0)
+{
+    double bin_f = (double)m * w0 * (double)C2M_DFT_SIZE / (2.0 * C2M_PI);
+
+    return (int)floor(bin_f + 0.5 + C2M_HARM_BIN_BIAS);
+}
+
 void c2m_ola_hop(double ola[C2M_HOP], const double block[C2M_FRAME_SAMPLES], double out[C2M_HOP])
 {
     for (int n = 0; n < C2M_HOP; n++) {
@@ -51,8 +69,7 @@ void c2m_synth_block(c2m_decode *st, const c2m_subframe *sub, double block[C2M_F
         y[n] = 0.0;
     }
     for (int m = 1; m <= env.count; m++) {
-        double bin_f = (double)m * sub->w0 * (double)C2M_DFT_SIZE / (2.0 * C2M_PI);
-        int bin = (int)floor(bin_f + 0.5);
+        int bin = c2m_harm_bin(m, sub->w0);
         int random_phase = !sub->voiced;
         double exc;
         double theta;

@@ -6,6 +6,7 @@
 // of the forward result is 512 times the input, within the error below.
 
 #include "c2fx_dsp.h"
+#define C2FX_TEST_PORTABLE_CLZ
 #include "c2fx_fxp.h"
 
 #include <math.h>
@@ -24,6 +25,40 @@ static uint32_t xorshift32(uint32_t *state)
     x ^= x << 5;
     *state = x;
     return x;
+}
+
+static int test_clz(void)
+{
+    uint32_t state = UINT32_C(0xC2F0C120);
+
+    for (int i = 0; i < 32; i++) {
+        uint32_t x = UINT32_C(1) << i;
+
+        if (c2fx_clz32_portable(x) != 31 - i || c2fx_clz32(x) != 31 - i) {
+            fprintf(stderr, "clz32 mismatch at 2^%d\n", i);
+            return 1;
+        }
+    }
+    for (int i = 0; i < 64; i++) {
+        uint64_t x = UINT64_C(1) << i;
+
+        if (c2fx_clz64_portable(x) != 63 - i || c2fx_clz64(x) != 63 - i) {
+            fprintf(stderr, "clz64 mismatch at 2^%d\n", i);
+            return 1;
+        }
+    }
+    for (int i = 0; i < 10000; i++) {
+        uint32_t lo = xorshift32(&state);
+        uint32_t hi = xorshift32(&state);
+        uint64_t x = ((uint64_t)hi << 32) | lo;
+
+        if (c2fx_clz32_portable(lo) != c2fx_clz32(lo) ||
+            c2fx_clz64_portable(x) != c2fx_clz64(x)) {
+            fprintf(stderr, "clz mismatch at random probe %d\n", i);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int test_fft(void)
@@ -88,17 +123,18 @@ static int test_cos(void)
 
     for (uint32_t i = 0; i < 65536u; i++) {
         uint32_t phase = i << 16;
-        double truth = cos(2.0 * 3.14159265358979323846 * (double)phase / 4294967296.0);
-        double got = (double)c2fx_cos(phase) / 32768.0;
+        /* Q15 with full scale 32767, as in RadioFoundry's mbe_sin_tab. */
+        double truth = 32767.0 * cos(2.0 * 3.14159265358979323846 * (double)phase / 4294967296.0);
+        double got = (double)c2fx_cos(phase);
         double err = fabs(got - truth);
 
         if (err > worst) {
             worst = err;
         }
     }
-    printf("cos: max error %.3f Q15 LSBs over 2^16 phases\n", worst * 32768.0);
-    if (worst * 32768.0 > 2.0) {
-        fprintf(stderr, "cos error %.3f Q15 LSBs above 2\n", worst * 32768.0);
+    printf("cos: max error %.3f Q15 LSBs over 2^16 phases\n", worst);
+    if (worst > 2.0) {
+        fprintf(stderr, "cos error %.3f Q15 LSBs above 2\n", worst);
         return 1;
     }
     return 0;
@@ -243,6 +279,7 @@ int main(void)
 {
     int failed = 0;
 
+    failed |= test_clz();
     failed |= test_fft();
     failed |= test_cos();
     failed |= test_log_exp();
