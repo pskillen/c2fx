@@ -56,12 +56,14 @@ void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe o
 
 /* LPC from LSPs. wide[k] / 2^q is coefficient k. Q27 starts the scale; q
  * shifts down to Q21..Q25 on real frames. |a| on real frames exceeds 8, which
- * a saturated Q12 copy cannot hold.
+ * a saturated Q12 copy cannot hold. quad is 3 * (C2FX_LSP_ORDER + 3) words:
+ * polynomials P and Q, then the quadratic product. It is scratch.
  */
 void c2fx_lsp_to_lpc(
     const int16_t lsp_q1[C2FX_LSP_ORDER],
     int32_t wide[C2FX_LSP_ORDER + 1],
-    int *q
+    int *q,
+    int32_t quad[3 * (C2FX_LSP_ORDER + 3)]
 );
 
 /* log2(1e-4) in Q11. round(log2(1e-4) * 2048) = -27213. Added to each
@@ -69,8 +71,14 @@ void c2fx_lsp_to_lpc(
  */
 #define C2FX_SUM_EPS_LOG2_Q11 (-27213)
 
-/* L and log2 amplitudes. Calls the LSP to LPC step. */
-void c2fx_envelope(c2fx_subframe *sub);
+/* L and log2 amplitudes. Calls the LSP to LPC step.
+ * log_den, log_num and log_p are 256-bin spectra; the caller owns them.
+ */
+void c2fx_envelope(
+    c2fx_subframe *sub,
+    int32_t log_den[256],
+    int32_t log_num[256],
+    int32_t log_p[256]);
 
 /* log2 of (sum 2^v[k] + 2^extra), with v and extra in Q11. The envelope
  * passes C2FX_SUM_EPS_LOG2_Q11 as extra for the spectrum sums.

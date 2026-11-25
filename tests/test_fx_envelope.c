@@ -71,6 +71,15 @@ static int check_sum_eps(void)
     return 0;
 }
 
+static void envelope(c2fx_subframe *sub)
+{
+    int32_t log_den[256];
+    int32_t log_num[256];
+    int32_t log_p[256];
+
+    c2fx_envelope(sub, log_den, log_num, log_p);
+}
+
 #ifndef C2M_POSTFILTER_PDF
 /* Harmonic amplitudes against the float model. The reference LPC is the
  * double LSP to LPC. worst is the largest error seen so far, in dB.
@@ -83,7 +92,7 @@ static int harmonics_over_bar(const c2m_subframe *ms, c2fx_subframe *fs, double 
 
     c2m_lsp_to_lpc(ms->lsp_rad, a);
     c2m_envelope_sample(a, ms->w0, ms->energy_db, &env);
-    c2fx_envelope(fs);
+    envelope(fs);
     if (fs->count != env.count) {
         fprintf(stderr, "harmonic count fx %d model %d\n", fs->count, env.count);
         return 1;
@@ -163,8 +172,8 @@ static int check_lsp_4000(void)
         printf("lsp 4000 Hz frame worst %7.3f dB\n", worst);
     }
 #else
-    c2fx_envelope(&fs[0]);
-    c2fx_envelope(&fs[1]);
+    envelope(&fs[0]);
+    envelope(&fs[1]);
     printf("lsp 4000 Hz frame decoded\n");
 #endif
     return 0;
@@ -190,6 +199,7 @@ static double poly_mag2(const double *a, double angle)
 static double lpc_db(const int16_t q1[C2FX_LSP_ORDER])
 {
     int32_t wide[C2FX_LSP_ORDER + 1];
+    int32_t quad[3 * (C2FX_LSP_ORDER + 3)];
     int q;
     double hz[C2FX_LSP_ORDER];
     double rad[C2FX_LSP_ORDER];
@@ -202,7 +212,7 @@ static double lpc_db(const int16_t q1[C2FX_LSP_ORDER])
     }
     c2m_lsp_hz_to_rad(hz, rad);
     c2m_lsp_to_lpc(rad, a);
-    c2fx_lsp_to_lpc(q1, wide, &q);
+    c2fx_lsp_to_lpc(q1, wide, &q, quad);
     for (int k = 0; k <= C2FX_LSP_ORDER; k++) {
         afx[k] = ldexp((double)wide[k], -q);
     }
@@ -326,7 +336,7 @@ static int run_file(const char *name)
 
             c2m_lsp_to_lpc(ms[s].lsp_rad, a);
             c2m_envelope_sample(a, ms[s].w0, ms[s].energy_db, &env);
-            c2fx_envelope(&fs[s]);
+            envelope(&fs[s]);
             if (fs[s].w0 != model_w0) {
                 bad_w += 1;
             }

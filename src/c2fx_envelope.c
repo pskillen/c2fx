@@ -323,13 +323,14 @@ static int32_t half_q11(int32_t x)
     return -((-x + 1) / 2);
 }
 
-void c2fx_envelope(c2fx_subframe *sub)
+void c2fx_envelope(
+    c2fx_subframe *sub,
+    int32_t log_den[SPECTRUM_BINS],
+    int32_t log_num[SPECTRUM_BINS],
+    int32_t log_p[SPECTRUM_BINS])
 {
     int32_t wide[C2FX_LSP_ORDER + 1];
     int32_t gamma[C2FX_LSP_ORDER + 1];
-    int32_t log_den[SPECTRUM_BINS];
-    int32_t log_num[SPECTRUM_BINS];
-    int32_t log_p[SPECTRUM_BINS];
     int q;
     int32_t log_scale;
     int count;
@@ -338,7 +339,10 @@ void c2fx_envelope(c2fx_subframe *sub)
     for (int m = 0; m < C2FX_MAX_HARMONICS; m++) {
         sub->amp_log2_q11[m] = 0;
     }
-    c2fx_lsp_to_lpc(sub->lsp_q1, wide, &q);
+    /* log_den is not live until the DFT below. The LSP step borrows its
+     * first 39 words for P, Q and the quadratic product.
+     */
+    c2fx_lsp_to_lpc(sub->lsp_q1, wide, &q, log_den);
     gamma[0] = wide[0];
     for (int k = 1; k <= C2FX_LSP_ORDER; k++) {
         gamma[k] = c2fx_mulshr(wide[k], gamma_q15[k], 15);
@@ -399,7 +403,10 @@ void c2fx_lpc_log_inv_power(const int16_t lsp_q1[C2FX_LSP_ORDER], int32_t log2_q
     int32_t wide[C2FX_LSP_ORDER + 1];
     int q;
 
-    c2fx_lsp_to_lpc(lsp_q1, wide, &q);
+    /* log2_q11 is filled by the DFT below. The LSP step borrows its first
+     * 39 words for P, Q and the quadratic product.
+     */
+    c2fx_lsp_to_lpc(lsp_q1, wide, &q, log2_q11);
     /* Floored |A|^2, then negate: log2 of the model's lpc power. */
     dft_log_power(wide, q, 1, log2_q11);
     for (int bin = 0; bin < SPECTRUM_BINS; bin++) {

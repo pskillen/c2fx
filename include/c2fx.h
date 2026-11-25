@@ -24,10 +24,10 @@
 #define C2FX_DEC_BYTES 416
 
 /* Bytes of per-call scratch, 8-byte aligned. One block for encode and
- * decode. It holds the FFT buffers and the sub-frames for this call only;
- * the next call may reuse the same memory.
+ * decode. It holds the FFT buffers, the envelope spectra and the
+ * sub-frames for this call only; the next call may reuse the same memory.
  */
-#define C2FX_SCRATCH_BYTES 4512
+#define C2FX_SCRATCH_BYTES 7576
 
 typedef struct c2fx_dec {
     uint64_t opaque[C2FX_DEC_BYTES / 8];

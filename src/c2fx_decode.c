@@ -2,8 +2,8 @@
 // Copyright (c) 2026 The c2fx Authors
 // Public decoder. State that survives a call lives in c2fx_dec_t: the
 // previous sub-frame, excitation phase, noise generator and the Q8
-// overlap tail. Buffers that do not survive (two 512-point FFTs and the
-// two sub-frames) come from the caller's scratch.
+// overlap tail. Buffers that do not survive (two 512-point FFTs, the
+// envelope spectra and the two sub-frames) come from the caller's scratch.
 
 #include "c2fx.h"
 
@@ -14,6 +14,9 @@
 typedef struct c2fx_scratch {
     int32_t work[C2FX_DFT];
     int32_t spec[C2FX_DFT];
+    int32_t log_den[256];
+    int32_t log_num[256];
+    int32_t log_p[256];
     c2fx_subframe sub[2];
 } c2fx_scratch;
 
@@ -66,8 +69,8 @@ static void flush_tail(c2fx_dec_state *st, int32_t *work, int16_t *pcm)
 
 static void synthesize_frame(c2fx_dec_state *st, c2fx_scratch *sc, int16_t *pcm)
 {
-    c2fx_envelope(&sc->sub[0]);
-    c2fx_envelope(&sc->sub[1]);
+    c2fx_envelope(&sc->sub[0], sc->log_den, sc->log_num, sc->log_p);
+    c2fx_envelope(&sc->sub[1], sc->log_den, sc->log_num, sc->log_p);
     c2fx_synth_hop(&sc->sub[0], sc->work, sc->spec, &st->phi1, &st->rng, st->ola, pcm);
     c2fx_synth_hop(
         &sc->sub[1], sc->work, sc->spec, &st->phi1, &st->rng, st->ola, pcm + C2FX_HOP);

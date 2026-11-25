@@ -102,11 +102,12 @@ static void scale_down(int32_t *poly, int n, int *q)
     }
 }
 
-/* poly *= (1 - 2*cos*z^-1 + z^-2). cosine is Q30. */
-static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t cosine)
+/* poly *= (1 - 2*cos*z^-1 + z^-2). cosine is Q30.
+ * next has C2FX_LSP_ORDER + 3 entries and is only written here.
+ */
+static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t cosine, int32_t *next)
 {
     int n = *order;
-    int32_t next[C2FX_LSP_ORDER + 3];
 
     scale_down(poly, n, q);
     for (int i = 0; i <= n + 2; i++) {
@@ -136,11 +137,14 @@ static void align_q(int32_t *poly, int n, int *q, int target)
 void c2fx_lsp_to_lpc(
     const int16_t lsp_q1[C2FX_LSP_ORDER],
     int32_t wide[C2FX_LSP_ORDER + 1],
-    int *q_out
+    int *q_out,
+    int32_t quad[3 * (C2FX_LSP_ORDER + 3)]
 )
 {
-    int32_t p[C2FX_LSP_ORDER + 3];
-    int32_t q[C2FX_LSP_ORDER + 3];
+    const int npoly = C2FX_LSP_ORDER + 3;
+    int32_t *p = quad;
+    int32_t *q = quad + npoly;
+    int32_t *next = quad + 2 * npoly;
     int p_order = 1;
     int q_order = 1;
     int p_q = LPC_Q;
@@ -156,10 +160,10 @@ void c2fx_lsp_to_lpc(
     }
 
     for (int j = 0; j < C2FX_LSP_ORDER; j += 2) {
-        mul_quadratic(p, &p_order, &p_q, cos_q30(phase_from_q1(lsp_q1[j])));
+        mul_quadratic(p, &p_order, &p_q, cos_q30(phase_from_q1(lsp_q1[j])), next);
     }
     for (int j = 1; j < C2FX_LSP_ORDER; j += 2) {
-        mul_quadratic(q, &q_order, &q_q, cos_q30(phase_from_q1(lsp_q1[j])));
+        mul_quadratic(q, &q_order, &q_q, cos_q30(phase_from_q1(lsp_q1[j])), next);
     }
 
     if (p_q > q_q) {
