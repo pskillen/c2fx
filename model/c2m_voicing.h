@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-/* Spec 10.2.4, the published test alone (OQ-12). One complex sinusoid is fit
+/* Spec 10.2.4, the published 6 dB test (OQ-12); c2fx's post-rules are below. One complex sinusoid is fit
  * in each harmonic band up to 1 kHz, least squares, as in Griffin and Lim,
  * "Multiband Excitation Vocoder", IEEE Trans. ASSP, 1988. The frame is voiced
  * when the summed band SNR exceeds 6 dB.
