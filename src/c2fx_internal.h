@@ -1,50 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The c2fx Authors
-// Decoder front half. Nothing here is in the public include/c2fx.h yet.
 
 #ifndef C2FX_INTERNAL_H
 #define C2FX_INTERNAL_H
 
-#include <stdint.h>
-
-#define C2FX_LSP_ORDER 10
-#define C2FX_MAX_HARMONICS 80
-
-typedef struct c2fx_indices {
-    int v_a; /* 1 = sub-frame a voiced */
-    int v_b; /* 1 = sub-frame b voiced */
-    int i;   /* w0 index, 0..127 */
-    int e;   /* energy index, 0..31 */
-    int d[C2FX_LSP_ORDER]; /* LSP delta indices, d[0] is d1 */
-} c2fx_indices;
-
-/* One sub-frame after dequant and the envelope.
- * lsp_q1 is Hz times 2 (the 0.5 Hz unit). w0 is the phase step, 2^32 = one
- * turn. energy_log2_q11 is log2 of the linear power. amp_log2_q11[m - 1] is
- * log2 of harmonic m's amplitude in Q11; int16 saturation caps near 2^16
- * linear (about 96 dB), below waveform clip. pitch_key is the w0 index,
- * or the sum of the two indices when w0 was averaged. pitch_mid says which.
- * Band edges and the harmonic bin are exact rationals of that key.
- */
-typedef struct c2fx_subframe {
-    int voiced;
-    uint32_t w0;
-    int count;
-    int pitch_key;
-    int pitch_mid;
-    int16_t energy_log2_q11;
-    int16_t lsp_q1[C2FX_LSP_ORDER];
-    int16_t amp_log2_q11[C2FX_MAX_HARMONICS];
-} c2fx_subframe;
-
-/* Previous sub-frame b. 24 bytes on this ABI (four flags, ten int16 LSPs). */
-typedef struct c2fx_front {
-    uint8_t ready;
-    uint8_t prev_voiced;
-    uint8_t prev_i;
-    uint8_t prev_e;
-    int16_t prev_lsp_q1[C2FX_LSP_ORDER];
-} c2fx_front;
+#include "c2fx_types.h"
 
 /* Gray-decoded field indices. Every 8-byte pattern is a frame. */
 void c2fx_frame_unpack(const uint8_t in[8], c2fx_indices *idx);
@@ -85,10 +45,6 @@ void c2fx_envelope(
  */
 int32_t c2fx_log2_sum(const int32_t *v, int n, int32_t extra);
 
-/* Spec 8. One sub-frame hop, and the overlap tail. */
-#define C2FX_HOP 80
-#define C2FX_DFT 512
-
 /* Same seed as the float model's C2M_PHASE_SEED, so both draw the same
  * xorshift32 sequence.
  */
@@ -100,19 +56,7 @@ int32_t c2fx_log2_sum(const int32_t *v, int n, int32_t extra);
 #define C2FX_LOST_ENERGY_STEPS 2
 #define C2FX_LOST_MAX_FRAMES 4
 
-/* Persistent decoder. The public object is a uint64_t array of this size,
- * rounded up in include/c2fx.h. ola[] is Q8 (linear sample times 256).
- */
-typedef struct c2fx_dec_state {
-    c2fx_front front;
-    c2fx_indices prev_idx;
-    uint32_t phi1;
-    uint32_t rng;
-    int32_t ola[C2FX_HOP];
-    uint8_t lost_run;
-} c2fx_dec_state;
-
-void c2fx_dec_state_init(c2fx_dec_state *st);
+void c2fx_dec_state_init(c2fx_dec_t *st);
 
 /* log2(1 / (|A|^2 + 1e-6)) at the 256 bins, Q11. */
 void c2fx_lpc_log_inv_power(const int16_t lsp_q1[C2FX_LSP_ORDER], int32_t log2_q11[256]);
@@ -152,9 +96,9 @@ void c2fx_ola_q8(int32_t ola[C2FX_HOP], const int32_t y[C2FX_DFT], int16_t out[C
  * 0: do not synthesize. *flush is 1 for the tail frame, 0 for silence.
  * The caller then calls c2fx_lost_restore.
  */
-int c2fx_lost_take(c2fx_dec_state *st, c2fx_indices *idx, int *flush);
+int c2fx_lost_take(c2fx_dec_t *st, c2fx_indices *idx, int *flush);
 
 /* Start-up state, keeping the noise generator. */
-void c2fx_lost_restore(c2fx_dec_state *st);
+void c2fx_lost_restore(c2fx_dec_t *st);
 
 #endif

@@ -40,7 +40,7 @@ static int crc_file(const char *path)
     const char *slash = strrchr(path, '/');
     const char *name = slash == NULL ? path : slash + 1;
     c2fx_dec_t dec;
-    uint64_t scratch[C2FX_SCRATCH_BYTES / 8];
+    c2fx_scratch_t scratch;
     uint32_t crc = UINT32_MAX;
     size_t frames = 0;
     uint8_t raw[C2FX_BITS_BYTES];
@@ -52,7 +52,7 @@ static int crc_file(const char *path)
         return 1;
     }
     if (c2fx_skip_header(in) != 0) {
-        fprintf(stderr, "cannot rewind %s\n", path);
+        fprintf(stderr, ferror(in) ? "cannot read %s\n" : "cannot rewind %s\n", path);
         fclose(in);
         return 1;
     }
@@ -60,7 +60,7 @@ static int crc_file(const char *path)
     while ((got = fread(raw, 1, sizeof raw, in)) == sizeof raw) {
         int16_t pcm[C2FX_FRAME_LEN];
 
-        c2fx_decode(&dec, raw, pcm, scratch);
+        c2fx_decode(&dec, raw, pcm, &scratch);
         for (int i = 0; i < C2FX_FRAME_LEN; i++) {
             uint16_t sample = (uint16_t)pcm[i];
 

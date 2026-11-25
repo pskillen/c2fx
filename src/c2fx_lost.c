@@ -8,7 +8,7 @@
 
 #include "c2fx_internal.h"
 
-int c2fx_lost_take(c2fx_dec_state *st, c2fx_indices *idx, int *flush)
+int c2fx_lost_take(c2fx_dec_t *st, c2fx_indices *idx, int *flush)
 {
     *flush = 0;
     st->lost_run = (uint8_t)(st->lost_run + 1u);
@@ -33,7 +33,7 @@ int c2fx_lost_take(c2fx_dec_state *st, c2fx_indices *idx, int *flush)
     return 1;
 }
 
-void c2fx_lost_restore(c2fx_dec_state *st)
+void c2fx_lost_restore(c2fx_dec_t *st)
 {
     uint32_t rng = st->rng;
 

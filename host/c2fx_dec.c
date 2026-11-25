@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The c2fx Authors
-// Decode one .c2 bitstream to int16 little-endian PCM. A 7-byte header is
-// skipped when the file name ends in .c2 and the mode byte is 0x00.
+// Decode a bitstream to int16 little-endian PCM, skipping a matching
+// 7-byte mode-3200 header when present.
 
 #include "c2_header.h"
 #include "c2fx.h"
@@ -26,7 +26,7 @@ int main(int argc, char **argv)
     FILE *in;
     FILE *out;
     c2fx_dec_t dec;
-    uint64_t scratch[C2FX_SCRATCH_BYTES / 8];
+    c2fx_scratch_t scratch;
     int frames = 0;
 
     if (argc != 3) {
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
         return 1;
     }
     if (c2fx_skip_header(in) != 0) {
-        fprintf(stderr, "cannot rewind %s\n", argv[1]);
+        fprintf(stderr, ferror(in) ? "cannot read %s\n" : "cannot rewind %s\n", argv[1]);
         fclose(in);
         fclose(out);
         return 1;
@@ -56,6 +56,12 @@ int main(int argc, char **argv)
         int16_t pcm[C2FX_FRAME_LEN];
         size_t got = fread(raw, 1, C2FX_BITS_BYTES, in);
 
+        if (ferror(in)) {
+            fprintf(stderr, "cannot read %s\n", argv[1]);
+            fclose(in);
+            fclose(out);
+            return 1;
+        }
         if (got == 0) {
             break;
         }
@@ -65,7 +71,7 @@ int main(int argc, char **argv)
             fclose(out);
             return 1;
         }
-        c2fx_decode(&dec, raw, pcm, scratch);
+        c2fx_decode(&dec, raw, pcm, &scratch);
         if (write_frame(out, pcm) != 0) {
             fprintf(stderr, "cannot write %s\n", argv[2]);
             fclose(in);

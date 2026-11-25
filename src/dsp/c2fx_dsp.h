@@ -41,6 +41,9 @@ int32_t c2fx_log2_q11(uint32_t x);
  * and Nyquist in buf[0] and buf[1], then real/imaginary pairs for bins
  * 1 through 255 in buf[2*k] and buf[2*k+1]. Q15 twiddle products and
  * the real-spectrum half sums use arithmetic right shifts. Matches mbe_rfft.
+ * The largest uniform input magnitude safe for all add/subtract stages
+ * is 4,194,303. c2fx_min_phase bounds the log spectrum by 204,099 and
+ * normalizes the cepstrum to at most 2^20 before its second transform.
  */
 void c2fx_rfft512(int32_t *buf);
 
@@ -48,6 +51,15 @@ void c2fx_rfft512(int32_t *buf);
  * time samples. Uses a positive exponent and the same Q15 twiddle
  * product rounding. The unnormalized inverse gives an ideal round-trip
  * gain of 512. Matches mbe_irfft.
+ * The largest uniform input magnitude safe for all add/subtract stages
+ * is 3,251,832 per packed word. Sparse spectra can have larger entries.
+ * Synthesis places at most 80 harmonic contributions, each below 2^22
+ * per component, with a separate real Nyquist contribution below 2^23.
+ * The inverse preprocessing contributes at most four times the sum of
+ * interior complex magnitudes plus twice the Nyquist magnitude, apart
+ * from Q15 rounding. The complex FFT only rotates and sums these terms.
+ * This bounds the decoder's inverse stages below 2.04e9, including
+ * fewer than 2,000 counts of accumulated rounding error.
  */
 void c2fx_irfft512(int32_t *buf);
 

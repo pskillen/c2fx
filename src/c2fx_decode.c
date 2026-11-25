@@ -11,21 +11,7 @@
 
 #include <stddef.h>
 
-typedef struct c2fx_scratch {
-    int32_t work[C2FX_DFT];
-    int32_t spec[C2FX_DFT];
-    int32_t log_den[256];
-    int32_t log_num[256];
-    int32_t log_p[256];
-    c2fx_subframe sub[2];
-} c2fx_scratch;
-
-typedef char c2fx_dec_size_ok[(sizeof(c2fx_dec_state) <= C2FX_DEC_BYTES) ? 1 : -1];
-typedef char c2fx_dec_align_ok[(C2FX_DEC_BYTES % 8 == 0) ? 1 : -1];
-typedef char c2fx_scratch_size_ok[(sizeof(c2fx_scratch) <= C2FX_SCRATCH_BYTES) ? 1 : -1];
-typedef char c2fx_scratch_align_ok[(C2FX_SCRATCH_BYTES % 8 == 0) ? 1 : -1];
-
-void c2fx_dec_state_init(c2fx_dec_state *st)
+void c2fx_dec_state_init(c2fx_dec_t *st)
 {
     c2fx_front_init(&st->front);
     st->prev_idx.v_a = 0;
@@ -45,10 +31,10 @@ void c2fx_dec_state_init(c2fx_dec_state *st)
 
 void c2fx_dec_init(c2fx_dec_t *d)
 {
-    c2fx_dec_state_init((c2fx_dec_state *)d);
+    c2fx_dec_state_init(d);
 }
 
-static void write_silence(c2fx_dec_state *st, int16_t *pcm)
+static void write_silence(c2fx_dec_t *st, int16_t *pcm)
 {
     for (int n = 0; n < C2FX_FRAME_LEN; n++) {
         pcm[n] = 0;
@@ -58,7 +44,7 @@ static void write_silence(c2fx_dec_state *st, int16_t *pcm)
     }
 }
 
-static void flush_tail(c2fx_dec_state *st, int32_t *work, int16_t *pcm)
+static void flush_tail(c2fx_dec_t *st, int32_t *work, int16_t *pcm)
 {
     for (int n = 0; n < C2FX_DFT; n++) {
         work[n] = 0;
@@ -67,7 +53,7 @@ static void flush_tail(c2fx_dec_state *st, int32_t *work, int16_t *pcm)
     c2fx_ola_q8(st->ola, work, pcm + C2FX_HOP);
 }
 
-static void synthesize_frame(c2fx_dec_state *st, c2fx_scratch *sc, int16_t *pcm)
+static void synthesize_frame(c2fx_dec_t *st, struct c2fx_dec_scratch *sc, int16_t *pcm)
 {
     c2fx_envelope(&sc->sub[0], sc->log_den, sc->log_num, sc->log_p);
     c2fx_envelope(&sc->sub[1], sc->log_den, sc->log_num, sc->log_p);
@@ -76,29 +62,28 @@ static void synthesize_frame(c2fx_dec_state *st, c2fx_scratch *sc, int16_t *pcm)
         &sc->sub[1], sc->work, sc->spec, &st->phi1, &st->rng, st->ola, pcm + C2FX_HOP);
 }
 
-void c2fx_decode(c2fx_dec_t *d, const uint8_t *bits, int16_t pcm[C2FX_FRAME_LEN], void *scratch)
+void c2fx_decode(c2fx_dec_t *d, const uint8_t *bits, int16_t pcm[C2FX_FRAME_LEN], c2fx_scratch_t *scratch)
 {
-    c2fx_dec_state *st = (c2fx_dec_state *)d;
-    c2fx_scratch *sc = (c2fx_scratch *)scratch;
+    struct c2fx_dec_scratch *sc = &scratch->dec;
     c2fx_indices idx;
     int flush = 0;
 
     if (bits == NULL) {
-        if (!c2fx_lost_take(st, &idx, &flush)) {
+        if (!c2fx_lost_take(d, &idx, &flush)) {
             if (flush) {
-                flush_tail(st, sc->work, pcm);
+                flush_tail(d, sc->work, pcm);
             } else {
-                write_silence(st, pcm);
+                write_silence(d, pcm);
             }
-            c2fx_lost_restore(st);
+            c2fx_lost_restore(d);
             return;
         }
     } else {
-        st->lost_run = 0;
+        d->lost_run = 0;
         c2fx_frame_unpack(bits, &idx);
-        st->prev_idx = idx;
+        d->prev_idx = idx;
     }
 
-    c2fx_dequant_frame(&st->front, &idx, sc->sub);
-    synthesize_frame(st, sc, pcm);
+    c2fx_dequant_frame(&d->front, &idx, sc->sub);
+    synthesize_frame(d, sc, pcm);
 }

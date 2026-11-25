@@ -19,6 +19,7 @@
 #include "c2fx_internal.h"
 
 #include "c2fx_dsp.h"
+#include "c2fx_fxp.h"
 
 /* log2(10^(6.38/20)) in Q11. round(1.059695062 * 2048) = 2170.
  * 2^(2170/2048) = 2.08431. 10^(6.38/20) = 2.08449. The gain is 0.00075 dB low.
@@ -41,15 +42,13 @@
 
 static int32_t sat_add(int32_t a, int32_t b)
 {
-    int64_t s = (int64_t)a + (int64_t)b;
-
-    if (s > 2147483647) {
-        return 2147483647;
+    if (b > 0 && a > INT32_MAX - b) {
+        return INT32_MAX;
     }
-    if (s < -2147483647 - 1) {
-        return -2147483647 - 1;
+    if (b < 0 && a < INT32_MIN - b) {
+        return INT32_MIN;
     }
-    return (int32_t)s;
+    return a + b;
 }
 
 static int32_t q8_clamp(int32_t x)
@@ -63,24 +62,14 @@ static int32_t q8_clamp(int32_t x)
     return x;
 }
 
-/* (a * b) >> s, rounded, half away from zero. */
-static int32_t mul_round(int32_t a, int32_t b, int s)
-{
-    int64_t p = (int64_t)a * (int64_t)b;
-    int64_t bias = (int64_t)1 << (s - 1);
-
-    if (p >= 0) {
-        p += bias;
-    } else {
-        p -= bias;
-    }
-    return (int32_t)(p >> s);
-}
-
+/* Shift to nearest, with ties away from zero. Shifts of 31 or more
+ * return zero, as in the synthesis scaling rule.
+ */
 static int32_t shr_round(int32_t x, int sh)
 {
-    int64_t v = x;
-    int64_t bias;
+    uint32_t mag;
+    uint32_t bias;
+    int32_t rounded;
 
     if (sh <= 0) {
         return x;
@@ -88,11 +77,10 @@ static int32_t shr_round(int32_t x, int sh)
     if (sh >= 31) {
         return 0;
     }
-    bias = (int64_t)1 << (sh - 1);
-    if (v >= 0) {
-        return (int32_t)((v + bias) >> sh);
-    }
-    return (int32_t) - ((-v + bias) >> sh);
+    mag = x < 0 ? 0u - (uint32_t)x : (uint32_t)x;
+    bias = 1u << (sh - 1);
+    rounded = (int32_t)((mag + bias) >> sh);
+    return x < 0 ? -rounded : rounded;
 }
 
 /* Round half up of m * f0 / 15.625, the same rational as c2m_harm_bin.
@@ -131,14 +119,17 @@ static void place_harmonic(int32_t *spec, int bin, int32_t amp_q, uint32_t theta
     int32_t c = c2fx_cos(theta);
     int32_t s = c2fx_cos(theta - 0x40000000u);
 
+    /* Bias harmonic products away from zero by half a step, then floor
+     * the shifted value. Even exact negative multiples lose one count.
+     */
     if (bin == 256) {
         /* Real Nyquist: N * A * cos(theta). 512/32768 = 1/64. */
-        spec[1] = sat_add(spec[1], mul_round(amp_q, c, 6));
+        spec[1] = sat_add(spec[1], c2fx_mulshr_bias_floor(amp_q, c, 6));
         return;
     }
     /* (N/2) * A * exp(j theta). 256/32768 = 1/128. */
-    spec[2 * bin] = sat_add(spec[2 * bin], mul_round(amp_q, c, 7));
-    spec[2 * bin + 1] = sat_add(spec[2 * bin + 1], mul_round(amp_q, s, 7));
+    spec[2 * bin] = sat_add(spec[2 * bin], c2fx_mulshr_bias_floor(amp_q, c, 7));
+    spec[2 * bin + 1] = sat_add(spec[2 * bin + 1], c2fx_mulshr_bias_floor(amp_q, s, 7));
 }
 
 /* y_qs = A * 2^s * cos. Return A * cos in Q8, times 2^(8-s). */
@@ -264,6 +255,9 @@ static void synthesize(const c2fx_subframe *sub, int32_t *work, int32_t *spec, u
         place_harmonic(spec, bin, amp_q, theta);
     }
 
+    /* The inverse sees at most 80 harmonic contributions, each below
+     * 2^22 per component (2^23 at Nyquist). See c2fx_dsp.h for headroom.
+     */
     c2fx_irfft512(spec);
     for (int n = 0; n < C2FX_DFT; n++) {
         spec[n] = to_q8(shr_round(spec[n], 9), s);

@@ -97,7 +97,7 @@ $(BUILD)/cflags.stamp: force
 	printf '%s\n' '$(CC) $(CFLAGS) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $(MODEL_CPPFLAGS)' > $@.tmp
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
-$(BUILD)/tables/%.o: src/tables/%.c src/tables/%.h include/c2fx.h $(BUILD)/cflags.stamp
+$(BUILD)/tables/%.o: src/tables/%.c src/tables/%.h include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
 
@@ -109,7 +109,7 @@ $(BUILD)/host-dsp/%.o: src/dsp/%.c src/dsp/c2fx_dsp.h src/dsp/c2fx_fxp.h $(BUILD
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(HOST_DSP_CPPFLAGS) -Isrc/dsp -c $< -o $@
 
-$(BUILD)/%.o: src/%.c include/c2fx.h src/c2fx_internal.h $(BUILD)/cflags.stamp
+$(BUILD)/%.o: src/%.c include/c2fx.h include/c2fx_types.h src/c2fx_internal.h src/dsp/c2fx_fxp.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc -Isrc/dsp -c $< -o $@
 
@@ -180,7 +180,7 @@ $(BUILD)/test_model_encoder: tests/test_model_encoder.c tests/test_lsd_helper.h 
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Itests $< $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h $(BUILD)/cflags.stamp
+$(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
 
@@ -188,19 +188,19 @@ $(BUILD)/test_tables: tests/test_tables.c $(BUILD)/libc2fx.a src/tables/c2_3200_
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
 
-$(BUILD)/test_dsp: tests/test_dsp.c $(BUILD)/libc2fx.a src/dsp/c2fx_dsp.h $(BUILD)/cflags.stamp
+$(BUILD)/test_dsp: tests/test_dsp.c $(BUILD)/libc2fx.a src/dsp/c2fx_dsp.h src/dsp/c2fx_fxp.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) -Isrc/dsp $< $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_fx_frame: tests/test_fx_frame.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h $(BUILD)/cflags.stamp
+$(BUILD)/test_fx_frame: tests/test_fx_frame.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h $(BUILD)/cflags.stamp
+$(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc -Isrc/dsp $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_fx_decode: tests/test_fx_decode.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(HOST_DSP_OBJS) include/c2fx.h $(BUILD)/cflags.stamp
+$(BUILD)/test_fx_decode: tests/test_fx_decode.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(HOST_DSP_OBJS) include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a $(HOST_DSP_OBJS) -lm -o $@
 
@@ -218,7 +218,7 @@ check-external-dsp: $(BUILD)/libc2fx.a
 	diff -u vectors/expected_crc.txt $(BUILD)/expected_crc.txt
 	@printf '%s\n' 'external DSP: D3 PCM and vector CRCs match'
 
-$(BUILD)/test_fx_robust: tests/test_fx_robust.c $(BUILD)/libc2fx.a $(MODEL_OBJS) include/c2fx.h $(BUILD)/cflags.stamp
+$(BUILD)/test_fx_robust: tests/test_fx_robust.c $(BUILD)/libc2fx.a $(MODEL_OBJS) include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
@@ -253,11 +253,11 @@ enc: build/c2m_enc
 		build/c2m_enc "$$f" "build/enc/$$base.c2"; \
 	done
 
-build/c2fx_dec: host/c2fx_dec.c host/c2_header.h $(BUILD)/libc2fx.a include/c2fx.h $(BUILD)/cflags.stamp
+build/c2fx_dec: host/c2fx_dec.c host/c2_header.h $(BUILD)/libc2fx.a include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
 
-$(CRC_TOOL): host/c2fx_crc.c host/c2_header.h $(BUILD)/libc2fx.a $(HOST_DSP_OBJS) include/c2fx.h $(BUILD)/cflags.stamp
+$(CRC_TOOL): host/c2fx_crc.c host/c2_header.h $(BUILD)/libc2fx.a $(HOST_DSP_OBJS) include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a $(HOST_DSP_OBJS) -o $@
 

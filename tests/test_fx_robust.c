@@ -65,7 +65,7 @@ static double rms(const int16_t *pcm)
     return sqrt(s / (double)C2FX_FRAME_LEN);
 }
 
-static int decode_bytes(c2fx_dec_t *dec, const uint8_t *bits, void *scratch, int16_t *pcm)
+static int decode_bytes(c2fx_dec_t *dec, const uint8_t *bits, c2fx_scratch_t *scratch, int16_t *pcm)
 {
     c2fx_decode(dec, bits, pcm, scratch);
     if (!in_range(pcm)) {
@@ -76,7 +76,7 @@ static int decode_bytes(c2fx_dec_t *dec, const uint8_t *bits, void *scratch, int
 }
 
 /* A known loud voiced frame, so a stuck decoder fails this check. */
-static int not_stuck(c2fx_dec_t *dec, void *scratch, const uint8_t *good)
+static int not_stuck(c2fx_dec_t *dec, c2fx_scratch_t *scratch, const uint8_t *good)
 {
     int heard = 0;
 
@@ -97,7 +97,7 @@ static int not_stuck(c2fx_dec_t *dec, void *scratch, const uint8_t *good)
     return 0;
 }
 
-static int random_frames(c2fx_dec_t *dec, void *scratch, const uint8_t *good)
+static int random_frames(c2fx_dec_t *dec, c2fx_scratch_t *scratch, const uint8_t *good)
 {
     uint32_t state = 0xC2F0A5A5u;
 
@@ -123,7 +123,7 @@ static int random_frames(c2fx_dec_t *dec, void *scratch, const uint8_t *good)
     return not_stuck(dec, scratch, good);
 }
 
-static int feed_pattern(c2fx_dec_t *dec, void *scratch, const uint8_t *raw, const uint8_t *good, const char *what)
+static int feed_pattern(c2fx_dec_t *dec, c2fx_scratch_t *scratch, const uint8_t *raw, const uint8_t *good, const char *what)
 {
     int16_t pcm[C2FX_FRAME_LEN];
 
@@ -134,7 +134,7 @@ static int feed_pattern(c2fx_dec_t *dec, void *scratch, const uint8_t *raw, cons
     return not_stuck(dec, scratch, good);
 }
 
-static int extremes(c2fx_dec_t *dec, void *scratch, const uint8_t *good)
+static int extremes(c2fx_dec_t *dec, c2fx_scratch_t *scratch, const uint8_t *good)
 {
     uint8_t raw[C2FX_BITS_BYTES];
     c2m_indices idx;
@@ -206,7 +206,7 @@ static int lost_run(const uint8_t *good)
 {
     c2fx_dec_t dec;
     c2m_decode md;
-    uint64_t scratch[C2FX_SCRATCH_BYTES / 8];
+    c2fx_scratch_t scratch;
     c2m_indices idx;
     int16_t model[C2M_FRAME_SAMPLES];
     int16_t fx[C2FX_FRAME_LEN];
@@ -219,12 +219,12 @@ static int lost_run(const uint8_t *good)
     c2m_decode_init(&md);
     c2m_frame_unpack(good, &idx);
     c2m_decode_pcm(&md, &idx, model);
-    if (decode_bytes(&dec, good, scratch, fx) != 0) {
+    if (decode_bytes(&dec, good, &scratch, fx) != 0) {
         return 1;
     }
     for (int n = 0; n < 10; n++) {
         c2m_decode_pcm(&md, NULL, model);
-        c2fx_decode(&dec, NULL, fx, scratch);
+        c2fx_decode(&dec, NULL, fx, &scratch);
         if (!in_range(fx)) {
             fprintf(stderr, "lost frame %d outside int16\n", n);
             return 1;
@@ -258,7 +258,7 @@ static int lost_run(const uint8_t *good)
     }
     for (int n = 0; n < 2; n++) {
         c2m_decode_pcm(&md, &idx, model);
-        if (decode_bytes(&dec, good, scratch, fx) != 0) {
+        if (decode_bytes(&dec, good, &scratch, fx) != 0) {
             return 1;
         }
         if (any_nonzero(fx)) {
@@ -294,7 +294,7 @@ static int load_good(uint8_t raw[C2FX_BITS_BYTES])
 int main(void)
 {
     c2fx_dec_t dec;
-    uint64_t scratch[C2FX_SCRATCH_BYTES / 8];
+    c2fx_scratch_t scratch;
     uint8_t good[C2FX_BITS_BYTES];
 
     if (load_good(good) != 0) {
@@ -304,12 +304,12 @@ int main(void)
         return 1;
     }
     c2fx_dec_init(&dec);
-    if (extremes(&dec, scratch, good) != 0) {
+    if (extremes(&dec, &scratch, good) != 0) {
         return 1;
     }
     printf("extremes: all-zero, all-ones, LSP, w0, energy\n");
     c2fx_dec_init(&dec);
-    if (random_frames(&dec, scratch, good) != 0) {
+    if (random_frames(&dec, &scratch, good) != 0) {
         return 1;
     }
     printf("random frames: %d, output in int16, recovered after a good frame\n", C2FX_ROBUST_FRAMES);

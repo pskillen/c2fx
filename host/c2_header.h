@@ -8,13 +8,19 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Skip the optional 7-byte header for mode 3200 (spec 2.3). */
+/* Skip the optional 7-byte header for mode 3200 (spec 2.3).
+ * A headerless stream starting with these seven magic bytes is read as
+ * having a header.
+ */
 static inline int c2fx_skip_header(FILE *in)
 {
     static const uint8_t header[7] = {0xc0, 0xde, 0xc2, 0x01, 0x02, 0x00, 0x00};
     uint8_t probe[sizeof header];
     size_t n = fread(probe, 1, sizeof probe, in);
 
+    if (ferror(in)) {
+        return -1;
+    }
     if (n == sizeof probe && memcmp(probe, header, sizeof probe) == 0) {
         return 0;
     }

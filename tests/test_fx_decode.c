@@ -59,7 +59,7 @@ static int run_file(const char *name, int drop_lo, int drop_hi,
     FILE *fp;
     c2fx_dec_t dec;
     c2m_decode md;
-    uint64_t scratch[C2FX_SCRATCH_BYTES / 8];
+    c2fx_scratch_t scratch;
     double sig = 0.0;
     double err = 0.0;
     double worst = 99.0;
@@ -94,11 +94,11 @@ static int run_file(const char *name, int drop_lo, int drop_hi,
         }
         if (n >= drop_lo && n <= drop_hi) {
             c2m_decode_pcm(&md, NULL, model);
-            c2fx_decode(&dec, NULL, fx, scratch);
+            c2fx_decode(&dec, NULL, fx, &scratch);
         } else {
             c2m_frame_unpack(raw, &idx);
             c2m_decode_pcm(&md, &idx, model);
-            c2fx_decode(&dec, raw, fx, scratch);
+            c2fx_decode(&dec, raw, fx, &scratch);
         }
         if (dump_pcm && fwrite(fx, sizeof fx[0], C2FX_FRAME_LEN, stdout) != C2FX_FRAME_LEN) {
             fprintf(stderr, "%s: cannot write frame %d PCM\n", name, n);

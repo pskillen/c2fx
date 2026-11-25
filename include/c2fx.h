@@ -4,7 +4,7 @@
 #ifndef C2FX_H
 #define C2FX_H
 
-#include <stdint.h>
+#include "c2fx_types.h"
 
 #define C2FX_VERSION_MAJOR 0
 #define C2FX_VERSION_MINOR 0
@@ -16,22 +16,9 @@
 /* One codec frame, 64 bits, packed into 8 bytes. */
 #define C2FX_BITS_BYTES 8
 
-/* Bytes of decoder state, rounded up to a multiple of 8. This holds what
- * has to survive from one call to the next: the previous sub-frame, the
- * excitation phase, the noise generator and the overlap-add tail.
- * c2fx_dec_t is that storage; the library casts it to its real struct.
- */
-#define C2FX_DEC_BYTES 416
-
-/* Bytes of per-call scratch, 8-byte aligned. One block for encode and
- * decode. It holds the FFT buffers, the envelope spectra and the
- * sub-frames for this call only; the next call may reuse the same memory.
- */
-#define C2FX_SCRATCH_BYTES 7576
-
-typedef struct c2fx_dec {
-    uint64_t opaque[C2FX_DEC_BYTES / 8];
-} c2fx_dec_t;
+/* Object sizes in bytes, as determined by sizeof on the target. */
+#define C2FX_DEC_BYTES (sizeof(c2fx_dec_t))
+#define C2FX_SCRATCH_BYTES (sizeof(c2fx_scratch_t))
 
 const char *c2fx_version(void);
 
@@ -45,12 +32,12 @@ void c2fx_dec_init(c2fx_dec_t *d);
  */
 
 /* bits == NULL means the frame was lost. pcm is one 20 ms frame.
- * scratch has C2FX_SCRATCH_BYTES bytes and is 8-byte aligned.
+ * scratch may be reused for the next call.
  */
 void c2fx_decode(
     c2fx_dec_t *d,
     const uint8_t *bits,
     int16_t pcm[C2FX_FRAME_LEN],
-    void *scratch);
+    c2fx_scratch_t *scratch);
 
 #endif

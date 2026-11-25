@@ -13,6 +13,7 @@
 #include "c2fx_internal.h"
 
 #include "c2fx_dsp.h"
+#include "c2fx_fxp.h"
 
 /* log2(1e-30) in Q11. round(log2(1e-30) * 2048) = -204099.
  * Real value 1e-30, the model's floor inside the log.
@@ -57,9 +58,7 @@ static uint32_t iabs32(int32_t x)
     return (uint32_t)(-x);
 }
 
-/* Arithmetic shift, truncating toward -inf. v is not INT_MIN when sh > 0
- * and the high bit would matter; the cepstrum peak is capped well below.
- */
+/* Divide by 2^sh, truncating toward zero. */
 static int32_t ashr(int32_t v, int sh)
 {
     if (sh <= 0) {
@@ -84,7 +83,7 @@ static int normalize_peak(int32_t *x, int n)
         }
     }
     if (peak > (uint32_t)C2FX_PHASE_PEAK) {
-        int bits = 32 - __builtin_clz(peak);
+        int bits = 32 - c2fx_clz32(peak);
 
         sh = bits - 21;
         if ((peak >> sh) > (uint32_t)C2FX_PHASE_PEAK) {
@@ -129,32 +128,12 @@ void c2fx_min_phase(const int32_t log2_q11[256], int32_t *fft, int32_t *side, in
 
 static uint32_t phase_u32(int32_t imag, int sh)
 {
-    int64_t prod = (int64_t)imag * (int64_t)C2FX_PHASE_K20;
     int right = 10 - sh;
 
     if (right > 0) {
-        int64_t bias = (int64_t)1 << (right - 1);
-
-        if (prod >= 0) {
-            prod += bias;
-        } else {
-            prod -= bias;
-        }
-        if (prod >= 0) {
-            prod >>= right;
-        } else {
-            prod = -(-prod >> right);
-        }
-    } else if (right < 0) {
-        int left = -right;
-
-        if (prod >= 0) {
-            prod <<= left;
-        } else {
-            prod = -((-prod) << left);
-        }
+        return c2fx_mulshr_round(imag, C2FX_PHASE_K20, right);
     }
-    return (uint32_t)prod;
+    return (uint32_t)c2fx_mulshr(imag, C2FX_PHASE_K20, 0) << -right;
 }
 
 uint32_t c2fx_min_phase_bin(const int32_t *spec, int bin, int sh)

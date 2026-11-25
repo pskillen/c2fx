@@ -37,14 +37,6 @@ static const int16_t gamma_q15[C2FX_LSP_ORDER + 1] = {
 #define ROT_COS_Q30 1073660973
 #define ROT_SIN_Q30 13176464
 
-static int clz32(uint32_t x)
-{
-    if (x == 0u) {
-        return 32;
-    }
-    return __builtin_clz(x);
-}
-
 static uint32_t iabs32(int32_t x)
 {
     if (x >= 0) {
@@ -69,7 +61,7 @@ static void mag2_norm(int32_t re, int32_t im, uint32_t *mant, int *exp)
         return;
     }
     /* Bring the larger part into [2^14, 2^15) so the squares fit in 30 bits. */
-    sh = 17 - clz32(peak);
+    sh = 17 - c2fx_clz32(peak);
     if (sh > 0) {
         ar >>= sh;
         ai >>= sh;
@@ -78,7 +70,7 @@ static void mag2_norm(int32_t re, int32_t im, uint32_t *mant, int *exp)
         ai <<= -sh;
     }
     mag = ar * ar + ai * ai;
-    left = clz32(mag) - 1;
+    left = c2fx_clz32(mag) - 1;
     *mant = mag << left;
     *exp = 2 * sh - left;
 }
@@ -123,7 +115,7 @@ static void add_norm(uint32_t *m0, int *e0, uint32_t m1, int e1)
         return;
     }
     sum = (uint64_t)a + ((uint64_t)b >> d);
-    top = 63 - __builtin_clzll(sum);
+    top = 63 - c2fx_clz64(sum);
     sh = top - 30;
     if (sh > 0) {
         sum >>= sh;
