@@ -26,6 +26,17 @@
  */
 #define C2M_LPC_BANDWIDTH_HZ 15.0
 
+/* [c2fx design] White-noise correction: r[0] is scaled by 1 + this before the
+ * recursion, a floor 67 dB below the frame power. Frames that are almost a pure
+ * low-frequency tone (a hum, a vowel's first harmonic with nothing above it)
+ * have a prediction error 60 dB or more under the signal, and their upper LSPs
+ * then follow rounding noise. The reference's upper LSPs on those frames sit as
+ * if such a floor were present: 1e-7 to 5e-7 cut the frames over 4 dB by a
+ * quarter, while 1e-5 and above move the energy index. The energy G^2 is taken
+ * after the correction; at this size it moves it by less than 1e-6 dB.
+ */
+#define C2M_LPC_WHITE_NOISE 2e-7
+
 /* [c2fx design] Reflection-coefficient cap so a singular frame cannot make
  * the Levinson error negative. Speech frames stay inside it.
  */

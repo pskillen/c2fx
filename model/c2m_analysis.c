@@ -258,6 +258,7 @@ void c2m_lpc_analyse(
 
     windowed_frame(pcm, n, centre, x);
     autocorrelation(x, r);
+    r[0] *= 1.0 + C2M_LPC_WHITE_NOISE;
     if (!(r[0] > 0.0)) {
         *energy = 0.0;
         flat_lsps(lsp_rad, C2M_LSP_FLAT_DIV, 0);
