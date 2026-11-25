@@ -223,7 +223,7 @@ $(BUILD)/test_fx_robust: tests/test_fx_robust.c $(BUILD)/libc2fx.a $(MODEL_OBJS)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 sanitize:
-	$(MAKE) test BUILD=build/sanitize EXTRA_CFLAGS='-fsanitize=address,undefined -DC2FX_ROBUST_FRAMES=1000000'
+	$(MAKE) test BUILD=build/sanitize EXTRA_CFLAGS='-fsanitize=address,undefined -fno-sanitize-recover=all -DC2FX_ROBUST_FRAMES=1000000'
 
 cross-arm:
 	$(MAKE) archive BUILD=build/arm CC='$(ARM_PREFIX)gcc' AR='$(ARM_PREFIX)ar' EXTRA_CFLAGS='$(ARM_CFLAGS)'
