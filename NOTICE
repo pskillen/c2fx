@@ -9,4 +9,13 @@ The quantizer table values in `src/tables/c2_3200_tab.c` come from Codec 2 (<htt
 
 An MIT grant for those values will be requested from the Codec 2 authors. Status: not yet requested.
 
-Every other file is original work under the MIT license, written from the published description of the mode.
+The following files are adapted from RadioFoundry and carry its MIT notice.
+
+- `src/dsp/c2fx_exp2_tab.c`
+- `src/dsp/c2fx_fft.c`
+- `src/dsp/c2fx_fxp.h`
+- `src/dsp/c2fx_math.c`
+- `src/dsp/c2fx_tables.c`
+
+The synthesized test phrases `test_transmission` and `ten_second_countdown`
+come from RadioFoundry. See the attribution in [REUSE.toml](REUSE.toml).
