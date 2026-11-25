@@ -21,7 +21,8 @@ typedef struct c2fx_indices {
 /* One sub-frame after dequant and the envelope.
  * lsp_q1 is Hz times 2 (the 0.5 Hz unit). w0 is the phase step, 2^32 = one
  * turn. energy_log2_q11 is log2 of the linear power. amp_log2_q11[m - 1] is
- * log2 of harmonic m's amplitude. pitch_key / pitch_mid select the band
+ * log2 of harmonic m's amplitude in Q11; int16 saturation caps near 2^16
+ * linear (about 96 dB), below waveform clip. pitch_key / pitch_mid select the band
  * edges: a grid index, or the sum of the two indices when w0 was averaged.
  */
 typedef struct c2fx_subframe {
@@ -52,8 +53,8 @@ void c2fx_front_init(c2fx_front *st);
 /* Voicing, w0, energy and LSPs for sub-frame a (out[0]) and b (out[1]). */
 void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe out[2]);
 
-/* LPC from LSPs. wide[k] / 2^q is coefficient k. q starts at 27 and drops
- * when the recursion would leave int32. |a| on real frames exceeds 8, which
+/* LPC from LSPs. wide[k] / 2^q is coefficient k. Q27 starts the scale; q
+ * shifts down to Q21..Q25 on real frames. |a| on real frames exceeds 8, which
  * a saturated Q12 copy cannot hold.
  */
 void c2fx_lsp_to_lpc(
@@ -64,5 +65,8 @@ void c2fx_lsp_to_lpc(
 
 /* L and log2 amplitudes. Calls the LSP to LPC step. */
 void c2fx_envelope(c2fx_subframe *sub);
+
+/* Host tests: log-domain sum with an epsilon term (same as in the envelope). */
+int32_t c2fx_log2_sum_for_test(const int32_t *v, int n, int32_t extra);
 
 #endif

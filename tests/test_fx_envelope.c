@@ -19,6 +19,58 @@
 #define MAX_SETS 32
 #define NAME_LEN 64
 #define AMP_DB 0.25
+#define C2FX_SUM_EPS_LOG2_Q11 (-27213)
+
+static int check_energy_table(void)
+{
+    c2fx_front fx;
+    c2fx_indices idx;
+    c2fx_subframe out[2];
+
+    for (int q = 0; q < 63; q++) {
+        double db = -10.0 + (double)q * (25.0 / 32.0);
+        int expect = (int)llround(log2(pow(10.0, db / 10.0)) * 2048.0);
+
+        memset(&idx, 0, sizeof idx);
+        c2fx_front_init(&fx);
+        if ((q & 1) != 0) {
+            fx.prev_e = (uint8_t)(q / 2);
+            idx.e = (uint8_t)(q - q / 2);
+            c2fx_dequant_frame(&fx, &idx, out);
+            if (out[0].energy_log2_q11 != (int16_t)expect) {
+                fprintf(stderr, "energy table q1=%d: got %d expect %d\n", q,
+                        (int)out[0].energy_log2_q11, expect);
+                return 1;
+            }
+        } else {
+            idx.e = (uint8_t)(q / 2);
+            c2fx_dequant_frame(&fx, &idx, out);
+            if (out[1].energy_log2_q11 != (int16_t)expect) {
+                fprintf(stderr, "energy table q1=%d: got %d expect %d\n", q,
+                        (int)out[1].energy_log2_q11, expect);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int check_sum_eps(void)
+{
+    const int32_t v[4] = { -28000, -28000, -28000, -28000 };
+    const int32_t got = c2fx_log2_sum_for_test(v, 4, C2FX_SUM_EPS_LOG2_Q11);
+    const int32_t wrong_eps = c2fx_log2_sum_for_test(v, 4, -(64 << 11));
+
+    if (got == wrong_eps) {
+        fprintf(stderr, "sum eps probe did not distinguish constants\n");
+        return 1;
+    }
+    if (got != -23070) {
+        fprintf(stderr, "sum eps golden %d got %d\n", -23070, (int)got);
+        return 1;
+    }
+    return 0;
+}
 
 static int ends_with(const char *name, const char *suffix)
 {
@@ -183,7 +235,6 @@ int main(void)
     int failed = 0;
 
     printf("w0 is round(2^32 * f0/8000). LSP q1 is round(hz * 2), the 0.5 Hz unit.\n");
-/* Goldens are for the default beta pair; make test EXTRA_CFLAGS=-DC2M_POSTFILTER_PDF skips amplitude. */
 #ifdef C2M_POSTFILTER_PDF
     printf("amplitude comparison skipped: libc2fx implements only the default post-filter pair\n");
 #endif
@@ -191,6 +242,8 @@ int main(void)
         fprintf(stderr, "cannot open vectors (run from the repository root)\n");
         return 1;
     }
+    failed |= check_energy_table();
+    failed |= check_sum_eps();
     while ((ent = readdir(dp)) != NULL) {
         if (!ends_with(ent->d_name, ".c2")) {
             continue;

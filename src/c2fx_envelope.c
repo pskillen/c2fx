@@ -20,7 +20,10 @@
 /* log2(0.032) in Q11. round(log2(0.032) * 2048) = -10170. Real value 0.032. */
 #define C2FX_HARM1_LOG2_Q11 (-10170)
 
-/* log2(1e-4) in Q11. round(log2(1e-4) * 2048) = -27213. Real value 1e-4. */
+/* log2(1e-4) in Q11. round(log2(1e-4) * 2048) = -27213. Real value 1e-4.
+ * The committed vectors never bring a sum this low; test_fx_envelope still
+ * probes this constant on crafted input.
+ */
 #define C2FX_SUM_EPS_LOG2_Q11 (-27213)
 
 /* 1e-6 = 1125899907 * 2^-50. Relative error about 1.4e-10. */
@@ -236,7 +239,7 @@ static void rot_by(int32_t *re, int32_t *im, int32_t cr, int32_t ci)
  * frames (the residual is a few thousand counts, the same size as the
  * twiddle error). This rotation is Q30, and coeff[k] / 2^q is the coefficient.
  */
-static void fft_log_power(const int32_t coeff[11], int q, int floored, int32_t out[SPECTRUM_BINS])
+static void dft_log_power(const int32_t coeff[11], int q, int floored, int32_t out[SPECTRUM_BINS])
 {
     int32_t step_r = 1 << 30;
     int32_t step_i = 0;
@@ -347,8 +350,8 @@ void c2fx_envelope(c2fx_subframe *sub)
         gamma[k] = c2fx_mulshr(wide[k], gamma_q15[k], 15);
     }
 
-    fft_log_power(wide, q, 1, log_den);
-    fft_log_power(gamma, q, 0, log_num);
+    dft_log_power(wide, q, 1, log_den);
+    dft_log_power(gamma, q, 0, log_num);
 
     for (int bin = 0; bin < SPECTRUM_BINS; bin++) {
         int32_t diff = log_num[bin] - log_den[bin];
@@ -395,4 +398,9 @@ void c2fx_envelope(c2fx_subframe *sub)
         }
         sub->amp_log2_q11[m - 1] = sat_q11(log_amp);
     }
+}
+
+int32_t c2fx_log2_sum_for_test(const int32_t *v, int n, int32_t extra)
+{
+    return log2_sum(v, n, extra);
 }

@@ -23,7 +23,7 @@ Paths not yet in the tree are planned.
 |---|---|
 | `include/c2fx.h` | Public header |
 | `src/` | Portable fixed-point code |
-| `src/dsp/` (planned) | This library's own FFT and trigonometry, left out when a host supplies them |
+| `src/dsp/` | This library's own FFT and trigonometry, left out when a host supplies them |
 | `src/arch/armv7em/`, `src/arch/csky/` (planned) | Architecture-specific kernels |
 | `src/tables/` | Generated quantizer tables (`c2_3200_tab.c`) |
 | `model/` | Floating-point oracle, for the host only, never linked into a product build |

@@ -3,7 +3,7 @@
 
 # Flash budgets in bytes of text + data (code and constants, not bss).
 # decoder_objs and encoder_objs name objects under build/<target>/.
-# Both lists are empty until those objects exist.
+# encoder_objs stays empty until the encoder exists; arm.decoder_objs is live.
 
 # DM-1701
 arm.radio = DM-1701

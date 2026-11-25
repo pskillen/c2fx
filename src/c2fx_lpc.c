@@ -1,13 +1,24 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The c2fx Authors
-// Spec 5: LSP to LPC. The recursion stays at Q27 until a coefficient would
-// leave int32, then the whole polynomial shifts right and the Q drops.
-// Callers keep that Q. A Q12 copy saturates: |a| on real frames exceeds 8.
+// Spec 5: LSP to LPC. Q27 starts the block-float scale; q shifts down to Q21..Q25
+// on real frames. Callers keep q. A Q12 copy saturates: |a| on real frames exceeds 8.
 
 #include "c2fx_internal.h"
 
+#include "dsp/c2fx_fxp.h"
+
 #define LPC_Q 27
 #define LPC_ONE (1 << LPC_Q)
+
+#define PI_Q30 3373259426u /* pi in Q30 */
+
+#define INV_U32_156 27531842u /* floor(2^32 / 156) + 1 */
+#define INV_U64_250 UINT64_C(73786976294838207) /* floor(2^64 / 250) + 1 */
+#define INV_U64_P30_6 UINT64_C(3074457345618258603) /* denominator 6 */
+#define INV_U64_P30_20 UINT64_C(922337203685477581) /* denominator 20 */
+#define INV_U64_P30_42 UINT64_C(439208192231179801) /* denominator 42 */
+#define INV_U64_P30_72 UINT64_C(256204778801521551) /* denominator 72 */
+#define INV_U64_P30_110 UINT64_C(167697673397359561) /* denominator 110 */
 
 /* sin(z * pi/2 / 2^30) in Q30, for z in 0..2^30. Horner form of the Taylor
  * series through theta^13:
@@ -20,17 +31,16 @@
  */
 static int32_t sin_quadrant_q30(uint32_t z)
 {
-    const uint64_t pi_q30 = 3373259426ull;
-    uint64_t th = ((uint64_t)z * pi_q30) >> 31;
-    uint64_t th2 = (th * th) >> 30;
-    uint64_t s = (1ull << 30) - th2 / 156ull;
+    uint32_t th = (uint32_t)(c2fx_umul32(z, PI_Q30) >> 31);
+    uint32_t th2 = (uint32_t)c2fx_mulshr((int32_t)th, (int32_t)th, 30);
+    uint32_t s = (1u << 30) - c2fx_udiv32_inv(th2, INV_U32_156);
 
-    s = (1ull << 30) - (th2 * s) / (110ull << 30);
-    s = (1ull << 30) - (th2 * s) / (72ull << 30);
-    s = (1ull << 30) - (th2 * s) / (42ull << 30);
-    s = (1ull << 30) - (th2 * s) / (20ull << 30);
-    s = (1ull << 30) - (th2 * s) / (6ull << 30);
-    return (int32_t)((th * s) >> 30);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_110);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_72);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_42);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_20);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_6);
+    return c2fx_mulshr((int32_t)th, (int32_t)s, 30);
 }
 
 /* cos(phase), 2^32 = one turn, Q30. */
@@ -56,9 +66,9 @@ static int32_t cos_q30(uint32_t phase)
  */
 static int32_t mul_cos(int32_t coeff, int32_t cos_q30)
 {
-    int64_t c1 = -(int64_t)cos_q30 * 2;
+    int32_t c1 = -cos_q30 * 2;
 
-    return (int32_t)(uint32_t)((uint64_t)((int64_t)coeff * c1) >> 30);
+    return c2fx_mulshr(coeff, c1, 30);
 }
 
 static uint32_t iabs32(int32_t x)
@@ -71,8 +81,10 @@ static uint32_t iabs32(int32_t x)
 
 static uint32_t phase_from_q1(int q1)
 {
-    /* round(2^32 * (q1/2) / 8000) = round(q1 * 2^26 / 250). */
-    return (uint32_t)((((uint64_t)q1 << 26) + 125u) / 250u);
+    /* round(2^32 * (q1/2) / 8000) = (q1 * 2^26 + 125) / 250. */
+    uint64_t num = c2fx_umul32((uint32_t)q1, 1u << 26) + 125u;
+
+    return c2fx_udiv64_inv(num, INV_U64_250);
 }
 
 static void scale_down(int32_t *poly, int n, int *q)
