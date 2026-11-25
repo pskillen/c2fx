@@ -138,8 +138,13 @@ static void write_silence(c2m_decode *st, int16_t out[C2M_FRAME_SAMPLES])
 static void restore_startup(c2m_decode *st)
 {
     uint32_t rng = st->rng;
+    c2m_noise_floor_fn hook = st->noise_floor;
+    void *hook_user = st->noise_floor_user;
+
     c2m_decode_init(st);
     st->rng = rng;
+    st->noise_floor = hook;
+    st->noise_floor_user = hook_user;
 }
 
 static const c2m_indices *lost_frame(c2m_decode *st, c2m_indices *rep)
