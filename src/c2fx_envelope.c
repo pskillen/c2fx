@@ -393,3 +393,16 @@ void c2fx_envelope(c2fx_subframe *sub)
         sub->amp_log2_q11[m - 1] = sat_q11(log_amp);
     }
 }
+
+void c2fx_lpc_log_inv_power(const int16_t lsp_q1[C2FX_LSP_ORDER], int32_t log2_q11[256])
+{
+    int32_t wide[C2FX_LSP_ORDER + 1];
+    int q;
+
+    c2fx_lsp_to_lpc(lsp_q1, wide, &q);
+    /* Floored |A|^2, then negate: log2 of the model's lpc power. */
+    dft_log_power(wide, q, 1, log2_q11);
+    for (int bin = 0; bin < SPECTRUM_BINS; bin++) {
+        log2_q11[bin] = -log2_q11[bin];
+    }
+}
