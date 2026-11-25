@@ -41,7 +41,7 @@ MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c) \
 	src/c2fx_frame.c src/c2fx_quant.c src/c2fx_lpc.c src/c2fx_envelope.c \
-	src/c2fx_phase.c src/c2fx_synth.c src/c2fx_lost.c
+	src/c2fx_phase.c src/c2fx_synth.c src/c2fx_lost.c src/c2fx_decode.c
 OBJS := $(SRCS:src/%.c=$(BUILD)/%.o)
 
 ARM_CFLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Os -ffunction-sections -fdata-sections
