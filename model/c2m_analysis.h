@@ -37,6 +37,9 @@
  */
 #define C2M_LSP_FLAT_DIV 10
 
+/* The 279-point analysis window: Hann scaled so the sum of squares is 1/512. */
+void c2m_analysis_weights(double w[C2M_ANALYSIS_LEN]);
+
 /* Order-10 autocorrelation LPC of the analysis window centred on `centre`.
  * Samples outside [0, n) are zero. energy is G^2 (spec 10.2.6). lsp_rad is
  * ten ordered frequencies in radians.

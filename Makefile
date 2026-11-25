@@ -78,7 +78,7 @@ $(BUILD)/%.o: src/%.c include/c2fx.h src/c2fx_internal.h $(BUILD)/cflags.stamp
 test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
 		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec \
 		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope \
-		$(BUILD)/test_model_quant_enc $(BUILD)/test_model_encoder
+		$(BUILD)/test_model_quant_enc $(BUILD)/test_model_encoder $(BUILD)/test_model_rules
 	$(BUILD)/test_version
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
@@ -90,6 +90,7 @@ test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUI
 	$(BUILD)/test_fx_frame
 	$(BUILD)/test_fx_envelope
 	$(BUILD)/test_model_quant_enc
+	$(BUILD)/test_model_rules
 	$(BUILD)/test_model_encoder
 
 $(BUILD)/model/%.o: model/%.c $(wildcard model/*.h) src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
@@ -117,6 +118,10 @@ $(BUILD)/test_model_vs_c2dec: tests/test_model_vs_c2dec.c $(MODEL_OBJS) $(wildca
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 $(BUILD)/test_model_quant_enc: tests/test_model_quant_enc.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_model_rules: tests/test_model_rules.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 

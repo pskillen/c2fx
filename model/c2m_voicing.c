@@ -17,21 +17,6 @@ static double sample_at(const int16_t *pcm, int n, int index)
     return (double)pcm[index];
 }
 
-static void analysis_weights(double w[C2M_ANALYSIS_LEN])
-{
-    double sum = 0.0;
-    double scale;
-
-    for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
-        w[i] = 0.5 - 0.5 * cos(2.0 * C2M_PI * (double)i / 278.0);
-        sum += w[i] * w[i];
-    }
-    scale = sqrt((1.0 / 512.0) / sum);
-    for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
-        w[i] *= scale;
-    }
-}
-
 /* DTFT of the analysis window at radian frequency dw. */
 static void window_dtft(const double w[C2M_ANALYSIS_LEN], double dw, double *re, double *im)
 {
@@ -57,7 +42,7 @@ static void window_dtft(const double w[C2M_ANALYSIS_LEN], double dw, double *re,
     *im = wi;
 }
 
-int c2m_voicing_decision(const int16_t *pcm, int n, int centre, double f0_hz)
+double c2m_voicing_snr_db(const int16_t *pcm, int n, int centre, double f0_hz)
 {
     double w[C2M_ANALYSIS_LEN];
     double re[C2M_VOICING_DFT];
@@ -67,9 +52,9 @@ int c2m_voicing_decision(const int16_t *pcm, int n, int centre, double f0_hz)
     int m_max;
 
     if (!(f0_hz > 0.0)) {
-        return 0;
+        return -100.0;
     }
-    analysis_weights(w);
+    c2m_analysis_weights(w);
     for (int k = 0; k < C2M_VOICING_DFT; k++) {
         re[k] = 0.0;
         im[k] = 0.0;
@@ -125,10 +110,66 @@ int c2m_voicing_decision(const int16_t *pcm, int n, int centre, double f0_hz)
         }
     }
     if (!(signal > 0.0)) {
-        return 0;
+        return -100.0;
     }
-    if (!(error > 0.0)) {
+    if (!(error > 0.0) || signal / error > 1e10) {
+        return 100.0;
+    }
+    return 10.0 * log10(signal / error);
+}
+
+double c2m_voicing_tilt(const int16_t *pcm, int n, int centre)
+{
+    double w[C2M_ANALYSIS_LEN];
+    double x[C2M_ANALYSIS_LEN];
+    double wsum = 0.0;
+    double xsum = 0.0;
+    double mean;
+    double r0 = 0.0;
+    double r1 = 0.0;
+
+    c2m_analysis_weights(w);
+    for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
+        x[i] = sample_at(pcm, n, centre - C2M_ANALYSIS_CENTRE + i);
+        wsum += w[i];
+        xsum += w[i] * x[i];
+    }
+    mean = xsum / wsum;
+    for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
+        x[i] = (x[i] - mean) * w[i];
+    }
+    for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
+        r0 += x[i] * x[i];
+        if (i + 1 < C2M_ANALYSIS_LEN) {
+            r1 += x[i] * x[i + 1];
+        }
+    }
+    if (!(r0 > 1e-9)) {
+        return 0.0;
+    }
+    return r1 / r0;
+}
+
+int c2m_voicing_base(double snr_db, double tilt)
+{
+    if (tilt > C2M_VOICING_TILT_ACCEPT) {
         return 1;
     }
-    return 10.0 * log10(signal / error) > C2M_VOICING_SNR_DB;
+    return snr_db > C2M_VOICING_SNR_DB && tilt > C2M_VOICING_TILT_REJECT;
+}
+
+int c2m_voicing_final(int prev_base, int base, int next_base, double tilt)
+{
+    if (base) {
+        return 1;
+    }
+    return prev_base && next_base && tilt > C2M_VOICING_TILT_BRIDGE;
+}
+
+int c2m_voicing_decision(const int16_t *pcm, int n, int centre, double f0_hz)
+{
+    return c2m_voicing_base(
+        c2m_voicing_snr_db(pcm, n, centre, f0_hz),
+        c2m_voicing_tilt(pcm, n, centre)
+    );
 }

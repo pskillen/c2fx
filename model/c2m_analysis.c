@@ -27,7 +27,7 @@ static double sample_at(const int16_t *pcm, int n, int index)
 }
 
 /* Hann, then scaled so the sum of squared weights is 1/512 (spec 10.2.2). */
-static void analysis_window(double w[C2M_ANALYSIS_LEN])
+void c2m_analysis_weights(double w[C2M_ANALYSIS_LEN])
 {
     double sum = 0.0;
     double scale;
@@ -46,7 +46,7 @@ static void windowed_frame(const int16_t *pcm, int n, int centre, double x[C2M_A
 {
     double w[C2M_ANALYSIS_LEN];
 
-    analysis_window(w);
+    c2m_analysis_weights(w);
     for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
         int sample = centre - C2M_ANALYSIS_CENTRE + i;
 

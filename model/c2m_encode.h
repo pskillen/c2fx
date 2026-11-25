@@ -14,11 +14,7 @@ typedef struct c2m_row {
     double w0;
     double energy;
     double lsp_rad[C2M_LSP_ORDER];
-    int voiced;
 } c2m_row;
-
-/* Analyse the window centred on `centre`. Samples outside [0, n) are zero. */
-void c2m_analyse_row(const int16_t *pcm, int n, int centre, c2m_row *row);
 
 /* Encode n samples, a whole number of 160-sample frames, to 8 bytes per frame.
  * Returns the frame count, or -1 if n is not a multiple of 160.
