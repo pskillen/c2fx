@@ -29,10 +29,25 @@
  *     onsets, offsets and in low-pitched or breathy speech.
  *  3. Hysteresis: an unvoiced row between two voiced rows becomes voiced when
  *     its tilt is above C2M_VOICING_TILT_BRIDGE.
+ *
+ * Rule 3 needs the next row's base flag, so each codec frame needs 80 samples
+ * of look-ahead beyond spec 10.1.1: row 2k+2's window ends at sample 160k+219,
+ * not 160k+139. The fixed-point streaming encoder inherits this.
  */
 #define C2M_VOICING_TILT_REJECT 0.0
 #define C2M_VOICING_TILT_ACCEPT 0.6
 #define C2M_VOICING_TILT_BRIDGE 0.5
+
+/* [c2fx design] Sentinels of c2m_voicing_snr_db: C2M_VOICING_SNR_NONE_DB when
+ * there is no signal or no pitch, and C2M_VOICING_SNR_MAX_DB when the fit
+ * leaves no residual. The ratio cap is 10^(100/10) = 1e10, so the dB value
+ * never passes the sentinel, and both lie far outside any real SNR (a speech
+ * row stays within a few tens of dB), so they only ever read as "no signal"
+ * and "perfectly voiced" against the 6 dB threshold.
+ */
+#define C2M_VOICING_SNR_NONE_DB -100.0
+#define C2M_VOICING_SNR_MAX_DB 100.0
+#define C2M_VOICING_SNR_MAX_RATIO 1e10
 
 /* Summed band SNR in dB: -100 when there is no signal, capped at 100. */
 double c2m_voicing_snr_db(const int16_t *pcm, int n, int center, double f0_hz);
@@ -49,10 +64,5 @@ int c2m_voicing_base(double snr_db, double tilt);
  * its neighbors.
  */
 int c2m_voicing_final(int prev_base, int base, int next_base, double tilt);
-
-/* The 6 dB test alone, on the base rules: 1 when the window centered on
- * `center` is voiced at f0_hz, without neighbors.
- */
-int c2m_voicing_decision(const int16_t *pcm, int n, int center, double f0_hz);
 
 #endif

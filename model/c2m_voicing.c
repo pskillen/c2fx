@@ -9,6 +9,20 @@
 
 #include <math.h>
 
+/* [c2fx design] Bias so ceil() of a band edge does not round up when the edge
+ * is an exact DFT bin and the double product lands a hair over it. At fs 8000
+ * and a 512-point DFT a bin is 15.625 Hz; the product error is about 1e-13 of
+ * a bin, and 1e-9 is far above that and far below any real fraction of a bin.
+ */
+#define C2M_VOICING_BAND_EDGE_BIAS 1e-9
+
+/* [c2fx design] Smallest windowed-frame autocorrelation r0 treated as signal.
+ * Samples are int16 values, so any real frame has r0 far above this; it
+ * only catches an all-zero or constant frame, whose mean-removed r0 is zero
+ * to rounding.
+ */
+#define C2M_VOICING_R0_FLOOR 1e-9
+
 static double sample_at(const int16_t *pcm, int n, int index)
 {
     if (index < 0 || index >= n) {
@@ -52,7 +66,7 @@ double c2m_voicing_snr_db(const int16_t *pcm, int n, int center, double f0_hz)
     int m_max;
 
     if (!(f0_hz > 0.0)) {
-        return -100.0;
+        return C2M_VOICING_SNR_NONE_DB;
     }
     c2m_analysis_weights(w);
     for (int k = 0; k < C2M_VOICING_DFT; k++) {
@@ -72,8 +86,8 @@ double c2m_voicing_snr_db(const int16_t *pcm, int n, int center, double f0_hz)
         double lo_hz = ((double)m - 0.5) * f0_hz;
         double hi_hz = ((double)m + 0.5) * f0_hz;
         double omega = 2.0 * C2M_PI * (double)m * f0_hz / C2M_FS_HZ;
-        int k_lo = (int)ceil(lo_hz * (double)C2M_VOICING_DFT / C2M_FS_HZ - 1e-9);
-        int k_hi = (int)ceil(hi_hz * (double)C2M_VOICING_DFT / C2M_FS_HZ - 1e-9);
+        int k_lo = (int)ceil(lo_hz * (double)C2M_VOICING_DFT / C2M_FS_HZ - C2M_VOICING_BAND_EDGE_BIAS);
+        int k_hi = (int)ceil(hi_hz * (double)C2M_VOICING_DFT / C2M_FS_HZ - C2M_VOICING_BAND_EDGE_BIAS);
         double num_re = 0.0;
         double num_im = 0.0;
         double den = 0.0;
@@ -110,10 +124,10 @@ double c2m_voicing_snr_db(const int16_t *pcm, int n, int center, double f0_hz)
         }
     }
     if (!(signal > 0.0)) {
-        return -100.0;
+        return C2M_VOICING_SNR_NONE_DB;
     }
-    if (!(error > 0.0) || signal / error > 1e10) {
-        return 100.0;
+    if (!(error > 0.0) || signal / error > C2M_VOICING_SNR_MAX_RATIO) {
+        return C2M_VOICING_SNR_MAX_DB;
     }
     return 10.0 * log10(signal / error);
 }
@@ -144,7 +158,7 @@ double c2m_voicing_tilt(const int16_t *pcm, int n, int center)
             r1 += x[i] * x[i + 1];
         }
     }
-    if (!(r0 > 1e-9)) {
+    if (!(r0 > C2M_VOICING_R0_FLOOR)) {
         return 0.0;
     }
     return r1 / r0;
@@ -164,12 +178,4 @@ int c2m_voicing_final(int prev_base, int base, int next_base, double tilt)
         return 1;
     }
     return prev_base && next_base && tilt > C2M_VOICING_TILT_BRIDGE;
-}
-
-int c2m_voicing_decision(const int16_t *pcm, int n, int center, double f0_hz)
-{
-    return c2m_voicing_base(
-        c2m_voicing_snr_db(pcm, n, center, f0_hz),
-        c2m_voicing_tilt(pcm, n, center)
-    );
 }

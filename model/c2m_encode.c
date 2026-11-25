@@ -10,7 +10,6 @@
 
 #include <stddef.h>
 
-
 /* One analyzed 10 ms row, with what the voicing rules and the pitch tracker
  * need from its neighbors.
  */

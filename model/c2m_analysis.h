@@ -15,6 +15,11 @@
 #define C2M_ANALYSIS_CENTER 139
 #define C2M_ANALYSIS_HOP 80
 
+/* The tuned constants below (this file's white-noise and bandwidth values, and
+ * the pitch constants in c2m_pitch.h) were tuned on the four voice files the
+ * tests use, so the agreement figures on those files are in-sample.
+ */
+
 /* [c2fx design] No input high-pass (spec 10.2.1). An impulse's LPC energy
  * matches the raw window, and a high-pass would move the energy and the LSPs.
  */
