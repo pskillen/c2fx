@@ -31,7 +31,7 @@ MODEL_CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
 MODEL_CPPFLAGS := -Imodel -Isrc/tables -Iinclude
 MODEL_SRCS := model/c2m_frame.c model/c2m_quant.c model/c2m_decode.c model/c2m_lpc.c \
 	model/c2m_phase.c model/c2m_synth.c model/c2m_fft.c model/c2m_analysis.c \
-	model/c2m_pitch.c model/c2m_voicing.c
+	model/c2m_pitch.c model/c2m_voicing.c model/c2m_encode.c
 MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c) \
@@ -44,7 +44,7 @@ ifeq ($(CSKY_DSP),1)
 CSKY_CFLAGS += -Wa,-mdsp
 endif
 
-.PHONY: all archive test sanitize cross-arm cross-csky clean force wav
+.PHONY: all archive test sanitize cross-arm cross-csky clean force wav enc
 
 all: archive
 
@@ -151,6 +151,18 @@ cross-csky:
 build/c2m_dec: model/c2m_dec.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+build/c2m_enc: model/c2m_enc.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+enc: build/c2m_enc
+	mkdir -p build/enc
+	@set -eu; \
+	for f in tests/data/voice/*.pcm tests/data/signals/*.pcm; do \
+		base=$$(basename "$$f" .pcm); \
+		build/c2m_enc "$$f" "build/enc/$$base.c2"; \
+	done
 
 wav: build/c2m_dec
 	mkdir -p build/wav
