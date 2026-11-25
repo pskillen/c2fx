@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "c2m_synth.h"
+#include "test_lsd_helper.h"
 
 #include <dirent.h>
 #include <math.h>
@@ -13,11 +14,6 @@
 
 #define MAX_SETS 64
 #define NAME_LEN 256
-#define LSD_BINS 127
-
-/* c2dec is already several dB from the source PCM; we require our decoder to
- * stay within 1 dB of c2dec's input distance, not under a fixed ceiling. */
-#define INPUT_LSD_MARGIN_DB 1.0
 
 static int ends_with(const char *name, const char *suffix)
 {
@@ -163,83 +159,6 @@ static int load_input_pcm(const char *path, int16_t **out, long count)
     return 0;
 }
 
-static void frame_mag(const int16_t *pcm, double mag[LSD_BINS + 1])
-{
-    double windowed[256];
-
-    for (int n = 0; n < 256; n++) {
-        windowed[n] = 0.0;
-    }
-    for (int n = 0; n < C2M_FRAME_SAMPLES; n++) {
-        double w = 0.5 * (1.0 - cos(2.0 * C2M_PI * (double)n / (double)C2M_FRAME_SAMPLES));
-
-        windowed[n] = w * (double)pcm[n];
-    }
-    for (int k = 1; k <= LSD_BINS; k++) {
-        double wr = 0.0;
-        double wi = 0.0;
-        double ang = 2.0 * C2M_PI * (double)k / 256.0;
-
-        for (int n = 0; n < 256; n++) {
-            wr += windowed[n] * cos(ang * (double)n);
-            wi -= windowed[n] * sin(ang * (double)n);
-        }
-        mag[k] = sqrt(wr * wr + wi * wi);
-    }
-}
-
-static double mean_lsd(const int16_t *left, const int16_t *right, const int16_t *gate, long count, int *used_out)
-{
-    double peak = 0.0;
-    double lsd_sum = 0.0;
-    int used = 0;
-
-    for (long i = 0; i < count; i++) {
-        double g = fabs((double)gate[i]);
-
-        if (g > peak) {
-            peak = g;
-        }
-    }
-    if (count == 0 || peak == 0.0) {
-        *used_out = 0;
-        return -1.0;
-    }
-    {
-        double thresh = peak * peak * pow(10.0, -40.0 / 10.0);
-
-        for (long off = 0; off + C2M_FRAME_SAMPLES <= count; off += C2M_FRAME_SAMPLES) {
-            double energy = 0.0;
-            double mag_l[LSD_BINS + 1];
-            double mag_r[LSD_BINS + 1];
-            double acc = 0.0;
-
-            for (int n = 0; n < C2M_FRAME_SAMPLES; n++) {
-                energy += (double)gate[off + n] * (double)gate[off + n];
-            }
-            if (energy / (double)C2M_FRAME_SAMPLES < thresh) {
-                continue;
-            }
-            frame_mag(left + off, mag_l);
-            frame_mag(right + off, mag_r);
-            for (int k = 1; k <= LSD_BINS; k++) {
-                double lv = mag_l[k] < 1.0 ? 1.0 : mag_l[k];
-                double rv = mag_r[k] < 1.0 ? 1.0 : mag_r[k];
-                double diff = 20.0 * log10(lv) - 20.0 * log10(rv);
-
-                acc += diff * diff;
-            }
-            lsd_sum += sqrt(acc / (double)LSD_BINS);
-            used += 1;
-        }
-    }
-    *used_out = used;
-    if (used == 0) {
-        return -1.0;
-    }
-    return lsd_sum / (double)used;
-}
-
 static int check_set(const char *dir, const char *c2_name)
 {
     char base[NAME_LEN];
@@ -293,7 +212,7 @@ static int check_set(const char *dir, const char *c2_name)
     {
         double level_db = 20.0 * log10(sqrt(sum_m / (double)count) / sqrt(sum_r / (double)count));
 
-        lsd_vs_c2dec = mean_lsd(model, ref, ref, count, &lsd_c2dec_frames);
+        lsd_vs_c2dec = c2m_test_mean_lsd(model, ref, ref, count, &lsd_c2dec_frames);
         if (voice) {
             snprintf(input_path, sizeof input_path, "tests/data/voice/%s.pcm", base);
             if (load_input_pcm(input_path, &input, count) != 0) {
@@ -301,19 +220,19 @@ static int check_set(const char *dir, const char *c2_name)
                 free(ref);
                 return 1;
             }
-            lsd_c2dec_input = mean_lsd(ref, input, input, count, &lsd_input_frames);
-            lsd_ours_input = mean_lsd(model, input, input, count, &lsd_input_frames);
+            lsd_c2dec_input = c2m_test_mean_lsd(ref, input, input, count, &lsd_input_frames);
+            lsd_ours_input = c2m_test_mean_lsd(model, input, input, count, &lsd_input_frames);
             if (lsd_input_frames == 0) {
                 fprintf(stderr, "%s has no voiced frames for input LSD\n", base);
                 failed = 1;
-            } else if (lsd_ours_input > lsd_c2dec_input + INPUT_LSD_MARGIN_DB) {
+            } else if (lsd_ours_input > lsd_c2dec_input + C2M_TEST_INPUT_LSD_MARGIN_DB) {
                 fprintf(
                     stderr,
                     "%s LSD vs input %.3f dB exceeds c2dec %.3f dB + %.1f\n",
                     base,
                     lsd_ours_input,
                     lsd_c2dec_input,
-                    INPUT_LSD_MARGIN_DB
+                    C2M_TEST_INPUT_LSD_MARGIN_DB
                 );
                 failed = 1;
             }

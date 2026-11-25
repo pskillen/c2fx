@@ -30,7 +30,8 @@ CPPFLAGS := -Iinclude -Isrc/tables
 MODEL_CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
 MODEL_CPPFLAGS := -Imodel -Isrc/tables -Iinclude
 MODEL_SRCS := model/c2m_frame.c model/c2m_quant.c model/c2m_decode.c model/c2m_lpc.c \
-	model/c2m_phase.c model/c2m_synth.c
+	model/c2m_phase.c model/c2m_synth.c model/c2m_fft.c model/c2m_analysis.c \
+	model/c2m_pitch.c model/c2m_voicing.c model/c2m_encode.c
 MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c) \
@@ -43,7 +44,7 @@ ifeq ($(CSKY_DSP),1)
 CSKY_CFLAGS += -Wa,-mdsp
 endif
 
-.PHONY: all archive test sanitize cross-arm cross-csky clean force wav
+.PHONY: all archive test sanitize cross-arm cross-csky clean force wav enc
 
 all: archive
 
@@ -76,7 +77,8 @@ $(BUILD)/%.o: src/%.c include/c2fx.h src/c2fx_internal.h $(BUILD)/cflags.stamp
 
 test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
 		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec \
-		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope
+		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope \
+		$(BUILD)/test_model_quant_enc $(BUILD)/test_model_encoder $(BUILD)/test_model_rules
 	$(BUILD)/test_version
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
@@ -87,6 +89,9 @@ test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUI
 	$(BUILD)/test_dsp
 	$(BUILD)/test_fx_frame
 	$(BUILD)/test_fx_envelope
+	$(BUILD)/test_model_quant_enc
+	$(BUILD)/test_model_rules
+	$(BUILD)/test_model_encoder
 
 $(BUILD)/model/%.o: model/%.c $(wildcard model/*.h) src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
@@ -108,9 +113,25 @@ $(BUILD)/test_model_synth: tests/test_model_synth.c $(MODEL_OBJS) $(wildcard mod
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_model_vs_c2dec: tests/test_model_vs_c2dec.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+$(BUILD)/test_lsd_helper.o: tests/test_lsd_helper.c tests/test_lsd_helper.h $(wildcard model/*.h) $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Itests -c $< -o $@
+
+$(BUILD)/test_model_vs_c2dec: tests/test_model_vs_c2dec.c tests/test_lsd_helper.h $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Itests $< $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_model_quant_enc: tests/test_model_quant_enc.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_model_rules: tests/test_model_rules.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_model_encoder: tests/test_model_encoder.c tests/test_lsd_helper.h $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Itests $< $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 $(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
@@ -150,6 +171,18 @@ cross-csky:
 build/c2m_dec: model/c2m_dec.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+build/c2m_enc: model/c2m_enc.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+enc: build/c2m_enc
+	mkdir -p build/enc
+	@set -eu; \
+	for f in tests/data/voice/*.pcm tests/data/signals/*.pcm; do \
+		base=$$(basename "$$f" .pcm); \
+		build/c2m_enc "$$f" "build/enc/$$base.c2"; \
+	done
 
 wav: build/c2m_dec
 	mkdir -p build/wav
