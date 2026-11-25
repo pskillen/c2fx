@@ -37,6 +37,8 @@ Paths not yet in the tree are planned.
 
 GNU make, a C99 compiler, and binutils (`size` and `nm`).
 
+The build stamps `c2fx_version()` from the exact Git tag (dropping a leading `v`), the short commit SHA, or `local` when Git metadata is unavailable. Set `C2FX_VERSION` to override it.
+
 ```sh
 make
 make test
