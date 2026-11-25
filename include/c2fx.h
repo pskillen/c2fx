@@ -6,10 +6,6 @@
 
 #include "c2fx_types.h"
 
-#define C2FX_VERSION_MAJOR 0
-#define C2FX_VERSION_MINOR 1
-#define C2FX_VERSION_PATCH 0
-
 /* One frame of PCM at 8 kHz. */
 #define C2FX_FRAME_LEN 160
 
@@ -20,6 +16,9 @@
 #define C2FX_DEC_BYTES (sizeof(c2fx_dec_t))
 #define C2FX_SCRATCH_BYTES (sizeof(c2fx_scratch_t))
 
+/* When compiling c2fx_version.c, a consumer may pass -DC2FX_VERSION="\"x.y.z\"".
+ * The default is "local".
+ */
 const char *c2fx_version(void);
 
 void c2fx_dec_init(c2fx_dec_t *d);

@@ -40,6 +40,14 @@ CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror -Wdouble-promotion -Wfloat-c
 EXTRA_CFLAGS ?=
 CPPFLAGS := -Iinclude -Isrc/tables
 
+ifeq ($(origin C2FX_VERSION),undefined)
+C2FX_VERSION := $(shell git describe --tags --exact-match 2>/dev/null || \
+	git rev-parse --short HEAD 2>/dev/null || echo local)
+endif
+export C2FX_VERSION
+VERSION := $(patsubst v%,%,$(C2FX_VERSION))
+VERSION_CASES := local 012abcd 1.2.3 1.2.3-rc.4
+
 # Host float model. No -Wdouble-promotion or -Wfloat-conversion: the oracle uses double.
 MODEL_CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
 MODEL_CPPFLAGS := -Imodel -Isrc/tables -Iinclude
@@ -88,13 +96,13 @@ $(BUILD)/libc2fx.a: $(OBJS)
 	$(AR) rcs $@.tmp $(OBJS)
 	mv $@.tmp $@
 
-# The stamp changes only when the compiler or flags change, so a later
+# The stamp changes when the compiler, flags, or version change, so a later
 # `make cross-csky CSKY_DSP=1` rebuilds objects left by a plain cross-csky.
 force: ;
 
 $(BUILD)/cflags.stamp: force
 	mkdir -p $(dir $@)
-	printf '%s\n' '$(CC) $(CFLAGS) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $(MODEL_CPPFLAGS)' > $@.tmp
+	printf '%s\n' '$(CC) $(CFLAGS) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $(MODEL_CPPFLAGS) $(VERSION)' > $@.tmp
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
 $(BUILD)/tables/%.o: src/tables/%.c src/tables/%.h include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
@@ -109,17 +117,26 @@ $(BUILD)/host-dsp/%.o: src/dsp/%.c src/dsp/c2fx_dsp.h src/dsp/c2fx_fxp.h $(BUILD
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(HOST_DSP_CPPFLAGS) -Isrc/dsp -c $< -o $@
 
+$(BUILD)/c2fx_version.o: src/c2fx_version.c include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) '-DC2FX_VERSION="$(VERSION)"' -c $< -o $@
+
 $(BUILD)/%.o: src/%.c include/c2fx.h include/c2fx_types.h src/c2fx_internal.h src/dsp/c2fx_fxp.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc -Isrc/dsp -c $< -o $@
 
-test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
+test: $(BUILD)/test_version $(addprefix $(BUILD)/test-version/,$(VERSION_CASES)) \
+		$(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
 		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec \
 		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope \
 		$(BUILD)/test_fx_decode $(BUILD)/test_fx_robust \
 		$(BUILD)/test_model_quant_enc $(BUILD)/test_model_encoder $(BUILD)/test_model_rules \
 		$(BUILD)/test_lsd_helper_self test-external-dsp test-crc
 	$(BUILD)/test_version
+	@set -eu; for version in $(VERSION_CASES); do \
+		actual=$$($(BUILD)/test-version/$$version); \
+		test "$$actual" = "c2fx version: $$version"; \
+	done
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
 	$(BUILD)/test_model_vectors
@@ -183,6 +200,13 @@ $(BUILD)/test_model_encoder: tests/test_model_encoder.c tests/test_lsd_helper.h 
 $(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
+
+$(BUILD)/test-version/%.o: src/c2fx_version.c include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) '-DC2FX_VERSION="$*"' -c $< -o $@
+
+$(BUILD)/test-version/%: tests/test_version.c $(BUILD)/test-version/%.o include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/test-version/$*.o -o $@
 
 $(BUILD)/test_tables: tests/test_tables.c $(BUILD)/libc2fx.a src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)

@@ -3,12 +3,11 @@
 
 #include "c2fx.h"
 
-#define C2FX_STR_IMPL(x) #x
-#define C2FX_STR(x) C2FX_STR_IMPL(x)
+#ifndef C2FX_VERSION
+#define C2FX_VERSION "local"
+#endif
 
 const char *c2fx_version(void)
 {
-    return C2FX_STR(C2FX_VERSION_MAJOR) "."
-           C2FX_STR(C2FX_VERSION_MINOR) "."
-           C2FX_STR(C2FX_VERSION_PATCH);
+    return C2FX_VERSION;
 }
