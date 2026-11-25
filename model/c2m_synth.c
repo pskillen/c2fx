@@ -26,6 +26,7 @@ void c2m_ola_hop(double ola[C2M_HOP], const double block[C2M_FRAME_SAMPLES], dou
 static void synth_block(c2m_decode *st, const c2m_subframe *sub, double block[C2M_FRAME_SAMPLES])
 {
     double a[C2M_LPC_ORDER + 1];
+    double lpc_power[C2M_SPECTRUM_BINS];
     c2m_envelope env;
     double minphase[C2M_SPECTRUM_BINS + 1];
     double y[C2M_DFT_SIZE];
@@ -33,8 +34,9 @@ static void synth_block(c2m_decode *st, const c2m_subframe *sub, double block[C2
     double peak = 0.0;
 
     c2m_lsp_to_lpc(sub->lsp_rad, a);
+    c2m_lpc_power(a, lpc_power);
+    c2m_min_phase(lpc_power, minphase);
     c2m_envelope_sample(a, sub->w0, sub->energy_db, &env);
-    c2m_min_phase(env.power, minphase);
     st->phi1 = c2m_advance_excitation(st->phi1, sub->w0, sub->voiced);
     /* Peak of one harmonic is A_m * 10^(gain/20). That is the spec 6.3
      * sinusoid peak; the gain already includes the one-sided factor of about 2.

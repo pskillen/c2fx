@@ -5,6 +5,9 @@
 
 #include <math.h>
 
+/* [c2fx design] Floor inside log(p) so the real cepstrum stays finite. */
+#define C2M_PHASE_LOG_FLOOR 1e-30
+
 static void fft_radix2(double *re, double *im, int n, int sign)
 {
     for (int i = 1, j = 0; i < n; i++) {
@@ -59,8 +62,8 @@ void c2m_min_phase(const double power[C2M_SPECTRUM_BINS], double phase_out[C2M_S
     for (int k = 0; k < C2M_SPECTRUM_BINS; k++) {
         double p = power[k];
 
-        if (p < 1e-30) {
-            p = 1e-30;
+        if (p < C2M_PHASE_LOG_FLOOR) {
+            p = C2M_PHASE_LOG_FLOOR;
         }
         re[k] = 0.5 * log(p);
         im[k] = 0.0;
