@@ -83,12 +83,42 @@ struct c2fx_dec_scratch {
 #define C2FX_ANALYSIS_CENTER 139
 #define C2FX_ANALYSIS_LEN (2 * C2FX_ANALYSIS_CENTER + 1)
 
-/* Temporary encoder LPC buffers. */
+#define C2FX_PITCH_BEFORE 260
+#define C2FX_PITCH_AFTER 160
+#define C2FX_PITCH_SPAN (C2FX_PITCH_BEFORE + C2FX_PITCH_AFTER)
+
+/* LPC and pitch use the workspace sequentially. */
 struct c2fx_enc_scratch {
-    int32_t windowed[C2FX_ANALYSIS_LEN];
-    int64_t r[C2FX_LSP_ORDER + 1];
-    int64_t a[C2FX_LSP_ORDER + 1];
-    int64_t poly[C2FX_LSP_ORDER / 2 + 1];
+    union {
+        struct {
+            int32_t windowed[C2FX_ANALYSIS_LEN];
+            int64_t r[C2FX_LSP_ORDER + 1];
+            int64_t a[C2FX_LSP_ORDER + 1];
+            int64_t poly[C2FX_LSP_ORDER / 2 + 1];
+        } lpc;
+        struct {
+            int32_t fft[C2FX_DFT];
+            int32_t notch[367];
+            union {
+                int64_t fir[64];
+                uint32_t power[130];
+            } stage;
+        } coarse;
+        struct {
+            int32_t fft[C2FX_DFT];
+            union {
+                int32_t input[70];
+                int16_t packed[C2FX_DFT];
+            } phase[3];
+            union {
+                struct {
+                    int32_t input[70];
+                    int32_t sine[129];
+                } fft;
+                int16_t spectrum[C2FX_DFT];
+            } stage;
+        } refinement;
+    } work;
 };
 
 union c2fx_scratch {

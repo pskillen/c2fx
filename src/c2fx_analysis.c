@@ -43,28 +43,28 @@ static int autocorrelation(const int16_t *x, struct c2fx_enc_scratch *s)
         }
     }
     if (peak == 0) {
-        s->r[0] = 0;
+        s->work.lpc.r[0] = 0;
         return 0;
     }
     /* The top bit goes to bit 14. INT16_MIN already fills the range. */
     boost = peak == 32768u ? 0 : c2fx_clz32(peak) - 17;
     gain = 1 << boost;
 
-    s->windowed[0] = 0;
-    s->windowed[C2FX_ANALYSIS_LEN - 1] = 0;
+    c2fx_hann_q38(s->work.lpc.windowed);
+    s->work.lpc.windowed[C2FX_ANALYSIS_LEN - 1] = 0;
     for (int i = 1; i < C2FX_ANALYSIS_CENTER; i++) {
         int mirror = C2FX_ANALYSIS_LEN - 1 - i;
-        int32_t tap = c2fx_hann_q38[i];
+        int32_t tap = s->work.lpc.windowed[i];
 
-        s->windowed[i] = (int32_t)c2fx_mulshr_round(x[i] * gain, tap, 38 - WINDOW_Q);
-        s->windowed[mirror] = (int32_t)c2fx_mulshr_round(x[mirror] * gain, tap, 38 - WINDOW_Q);
+        s->work.lpc.windowed[i] = (int32_t)c2fx_mulshr_round(x[i] * gain, tap, 38 - WINDOW_Q);
+        s->work.lpc.windowed[mirror] = (int32_t)c2fx_mulshr_round(x[mirror] * gain, tap, 38 - WINDOW_Q);
     }
-    s->windowed[C2FX_ANALYSIS_CENTER] = (int32_t)c2fx_mulshr_round(
-        x[C2FX_ANALYSIS_CENTER] * gain, c2fx_hann_q38[C2FX_ANALYSIS_CENTER], 38 - WINDOW_Q);
+    s->work.lpc.windowed[C2FX_ANALYSIS_CENTER] = (int32_t)c2fx_mulshr_round(
+        x[C2FX_ANALYSIS_CENTER] * gain, s->work.lpc.windowed[C2FX_ANALYSIS_CENTER], 38 - WINDOW_Q);
 
     for (int k = 0; k <= C2FX_LSP_ORDER; k++) {
         int64_t sum = 0;
-        const int32_t *left = s->windowed;
+        const int32_t *left = s->work.lpc.windowed;
         const int32_t *right = left + k;
         const int32_t *end = left + C2FX_ANALYSIS_LEN - k;
         const int32_t *block_end = left + ((C2FX_ANALYSIS_LEN - k) & ~3);
@@ -79,22 +79,22 @@ static int autocorrelation(const int16_t *x, struct c2fx_enc_scratch *s)
         for (; left != end; left++, right++) {
             sum = c2fx_mac32(sum, *left, *right);
         }
-        s->r[k] = sum;
+        s->work.lpc.r[k] = sum;
     }
     /* The boosted peak and every interior Hann tap are large enough
      * that r[0] is nonzero. Put its high bit at CORR_BIT to leave headroom
      * for the LPC sum. Each lag is the stored value times 2^(shift-40-2*boost).
      */
-    int shift = 63 - c2fx_clz64((uint64_t)s->r[0]) - CORR_BIT;
+    int shift = 63 - c2fx_clz64((uint64_t)s->work.lpc.r[0]) - CORR_BIT;
     for (int k = 0; k <= C2FX_LSP_ORDER; k++) {
         if (shift > 0) {
-            s->r[k] >>= shift;
+            s->work.lpc.r[k] >>= shift;
         } else {
-            s->r[k] *= INT64_C(1) << -shift;
+            s->work.lpc.r[k] *= INT64_C(1) << -shift;
         }
     }
     /* White-noise correction, 2e-7 in Q52. */
-    s->r[0] = c2fx_add64(s->r[0], c2fx_mulshr64(s->r[0], WHITE_NOISE, LPC_Q));
+    s->work.lpc.r[0] = c2fx_add64(s->work.lpc.r[0], c2fx_mulshr64(s->work.lpc.r[0], WHITE_NOISE, LPC_Q));
     return shift - 2 * (WINDOW_Q + boost);
 }
 
@@ -397,13 +397,13 @@ static void lpc_to_lsp(c2fx_enc_row *row, struct c2fx_enc_scratch *s)
     int32_t q[LSP_HALF_ORDER + 1];
 
     for (int k = 1; k <= C2FX_LSP_ORDER; k++) {
-        s->a[k] = c2fx_mulshr64(s->a[k], bandwidth_q30[k - 1], 30);
+        s->work.lpc.a[k] = c2fx_mulshr64(s->work.lpc.a[k], bandwidth_q30[k - 1], 30);
     }
 
-    split_polynomial(s->a, 1, s->poly);
-    normalize_polynomial(s->poly, p);
-    split_polynomial(s->a, -1, s->poly);
-    normalize_polynomial(s->poly, q);
+    split_polynomial(s->work.lpc.a, 1, s->work.lpc.poly);
+    normalize_polynomial(s->work.lpc.poly, p);
+    split_polynomial(s->work.lpc.a, -1, s->work.lpc.poly);
+    normalize_polynomial(s->work.lpc.poly, q);
     if (!find_roots(p, q, row->lsp_hz_q16)) {
         flat_lsps(row, 1, C2FX_LSP_ORDER + 1);
     }
@@ -415,15 +415,15 @@ void c2fx_lpc_analyze(const int16_t x[C2FX_ANALYSIS_LEN],
     int exponent = autocorrelation(x, s);
     uint64_t energy;
 
-    if (s->r[0] == 0) {
+    if (s->work.lpc.r[0] == 0) {
         row->energy_log2_q24 = INT32_MIN;
         flat_lsps(row, 0, C2FX_LSP_ORDER);
         return;
     }
     for (int j = 1; j <= C2FX_LSP_ORDER; j++) {
-        s->a[j] = 0;
+        s->work.lpc.a[j] = 0;
     }
-    energy = c2fx_levinson_q52(s->r, s->a, C2FX_LSP_ORDER);
+    energy = c2fx_levinson_q52(s->work.lpc.r, s->work.lpc.a, C2FX_LSP_ORDER);
     row->energy_log2_q24 = energy == 0 ? INT32_MIN : energy_log2(energy, exponent);
     lpc_to_lsp(row, s);
 }

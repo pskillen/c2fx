@@ -36,6 +36,24 @@ void c2fx_lpc_analyze(const int16_t x[C2FX_ANALYSIS_LEN],
  */
 uint64_t c2fx_levinson_q52(const int64_t *r, int64_t *a, int order);
 
+/* Pitch input spans center - 260 through center + 159, zero-padded by
+ * the caller. The notch block spans [-160, 159], the period check uses
+ * [-100, 99] at lags up to 160, and the analysis window spans [-139, 139].
+ * Previous pitch is Q20 Hz, or zero when there is no voiced predecessor.
+ * Coarse pitch is Q20 Hz before the final range clamp.
+ */
+int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
+                          struct c2fx_enc_scratch *s);
+
+/* Refined pitch, Q20 Hz in [50, 400]. The signed 16-bit array
+ * s->work.refinement.stage.spectrum holds the complex analysis FFT
+ * in c2fx_rfft512 packing, with a common per-row scale. Consume it
+ * before reusing the encoder workspace for LPC or another pitch row.
+ */
+int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
+                      struct c2fx_enc_scratch *s);
+
+int c2fx_quant_w0_index(int32_t hz_q20);
 int c2fx_quant_energy_index(const c2fx_enc_row *row);
 void c2fx_quant_lsp_indices(const c2fx_enc_row *row, int d[C2FX_LSP_ORDER]);
 

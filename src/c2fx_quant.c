@@ -174,3 +174,16 @@ void c2fx_quant_lsp_indices(const c2fx_enc_row *row, int d[C2FX_LSP_ORDER])
         sum += tab[k];
     }
 }
+
+int c2fx_quant_w0_index(int32_t hz_q20)
+{
+    const int32_t min = INT32_C(50) << 20;
+    const int32_t step = 350 << (20 - 7);
+    int index;
+
+    if (hz_q20 <= min) {
+        return 0;
+    }
+    index = (hz_q20 - min + step / 2) / step;
+    return index < 127 ? index : 127;
+}
