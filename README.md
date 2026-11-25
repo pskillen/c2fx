@@ -26,11 +26,11 @@ Paths not yet in the tree are planned.
 | `src/dsp/` (planned) | This library's own FFT and trigonometry, left out when a host supplies them |
 | `src/arch/armv7em/`, `src/arch/csky/` (planned) | Architecture-specific kernels |
 | `src/tables/` | Generated quantizer tables (`c2_3200_tab.c`) |
-| `model/` (planned) | Floating-point oracle, for the host only, never linked into a product build |
+| `model/` | Floating-point oracle, for the host only, never linked into a product build |
 | `tests/` | Host tests |
-| `vectors/` (planned) | Committed test vectors |
+| `vectors/` | Committed test vectors |
 | `tools/` | Scripts for vectors, tables, size, and symbol checks |
-| `docs/spec/` (planned) | Algorithm specification |
+| `docs/spec/` | Algorithm specification |
 | `docs/clean-room.md` | Clean-room roles and the reading log |
 
 ## Build and test
@@ -41,12 +41,13 @@ GNU make, a C99 compiler, and binutils (`size` and `nm`).
 make
 make test
 make sanitize
+make wav
 make cross-arm
 make cross-csky
 make cross-csky CSKY_DSP=1
 ```
 
-`make` writes `build/host/libc2fx.a`. `make test` builds that archive and runs the host tests. `make sanitize` runs the same tests with `-fsanitize=address,undefined`.
+`make` writes `build/host/libc2fx.a`. `make test` builds that archive and runs the host tests. `make sanitize` runs the same tests with `-fsanitize=address,undefined`. `make wav` builds `build/c2m_dec` and writes 8 kHz mono PCM under `build/wav/` for each committed vector bitstream.
 
 `make cross-arm` writes `build/arm/libc2fx.a` for Cortex-M4, Thumb, soft-float (`-mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Os -ffunction-sections -fdata-sections`). `make cross-csky` writes `build/csky/libc2fx.a` for CK803S (`-mcpu=ck803s -Os -ffunction-sections -fdata-sections`). `CSKY_DSP=1` adds `-Wa,-mdsp` and writes `build/csky-dsp/libc2fx.a`.
 

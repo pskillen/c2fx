@@ -3,12 +3,13 @@
 
 # Host archive:         make
 # Host tests:           make test
+# Decode vectors WAV:   make wav
 # ASan and UBSan:       make sanitize
 # Cortex-M4 soft-float: make cross-arm
 # CK803S:               make cross-csky
 # CK803S with DSP asm:  make cross-csky CSKY_DSP=1
 #
-# model/ is the host float oracle. It is built by `make test` only.
+# model/ is the host float oracle. `make test` and `make wav` build it.
 # The archive and the cross builds do not contain it.
 #
 # ARM_PREFIX and CSKY_PREFIX are the cross tool prefixes, including the
@@ -28,7 +29,8 @@ CPPFLAGS := -Iinclude -Isrc/tables
 # Host float model. No -Wdouble-promotion or -Wfloat-conversion: the oracle uses double.
 MODEL_CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
 MODEL_CPPFLAGS := -Imodel -Isrc/tables -Iinclude
-MODEL_SRCS := model/c2m_frame.c model/c2m_quant.c model/c2m_decode.c model/c2m_lpc.c
+MODEL_SRCS := model/c2m_frame.c model/c2m_quant.c model/c2m_decode.c model/c2m_lpc.c \
+	model/c2m_phase.c model/c2m_synth.c
 MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c)
@@ -40,7 +42,7 @@ ifeq ($(CSKY_DSP),1)
 CSKY_CFLAGS += -Wa,-mdsp
 endif
 
-.PHONY: all archive test sanitize cross-arm cross-csky clean force
+.PHONY: all archive test sanitize cross-arm cross-csky clean force wav
 
 all: archive
 
@@ -67,11 +69,15 @@ $(BUILD)/%.o: src/%.c include/c2fx.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
 
-test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors
+test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
+		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec
 	$(BUILD)/test_version
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
 	$(BUILD)/test_model_vectors
+	$(BUILD)/test_model_envelope
+	$(BUILD)/test_model_synth
+	$(BUILD)/test_model_vs_c2dec
 
 $(BUILD)/model/%.o: model/%.c $(wildcard model/*.h) src/tables/c2_3200_tab.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
@@ -82,6 +88,18 @@ $(BUILD)/test_model_frame: tests/test_model_frame.c $(MODEL_OBJS) $(wildcard mod
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 $(BUILD)/test_model_vectors: tests/test_model_vectors.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_model_envelope: tests/test_model_envelope.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_model_synth: tests/test_model_synth.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_model_vs_c2dec: tests/test_model_vs_c2dec.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
@@ -107,6 +125,20 @@ endif
 
 cross-csky:
 	$(MAKE) archive BUILD=$(CSKY_BUILD) CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
+
+build/c2m_dec: model/c2m_dec.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+wav: build/c2m_dec
+	mkdir -p build/wav
+	@set -eu; \
+	for f in vectors/*.c2; do \
+		base=$$(basename "$$f" .c2); \
+		build/c2m_dec "$$f" "build/wav/$$base.pcm"; \
+		python3 tools/pcm_to_wav.py "build/wav/$$base.pcm" "build/wav/$$base.wav"; \
+		rm -f "build/wav/$$base.pcm"; \
+	done
 
 clean:
 	rm -rf build

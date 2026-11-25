@@ -3,6 +3,8 @@
 
 #include "c2m_decode.h"
 
+#include <stddef.h>
+
 void c2m_decode_init(c2m_decode *st)
 {
     st->has_prev = 0;
@@ -14,6 +16,19 @@ void c2m_decode_init(c2m_decode *st)
         /* Spec 4 start-up: previous LSP i = i*pi/11 rad. */
         st->prev_lsp_hz[j] = (double)j * C2M_FS_HZ / 22.0;
     }
+    st->prev_i = 0;
+    st->prev_e = 0;
+    for (int j = 0; j < C2M_LSP_ORDER; j++) {
+        st->prev_d[j] = 0;
+    }
+    st->lost_run = 0;
+    st->phi1 = 0.0;
+    st->rng = C2M_PHASE_SEED;
+    for (int n = 0; n < C2M_HOP; n++) {
+        st->ola[n] = 0.0;
+    }
+    st->noise_floor = NULL;
+    st->noise_floor_user = NULL;
 }
 
 static void copy_lsp(const double hz[C2M_LSP_ORDER], double dest[C2M_LSP_ORDER])
@@ -76,4 +91,9 @@ void c2m_decode_frame(c2m_decode *st, const c2m_indices *idx, c2m_subframe out[2
     st->prev_w0 = cur.w0;
     st->prev_energy_db = cur.energy_db;
     copy_lsp(cur.lsp_hz, st->prev_lsp_hz);
+    st->prev_i = idx->i;
+    st->prev_e = idx->e;
+    for (int j = 0; j < C2M_LSP_ORDER; j++) {
+        st->prev_d[j] = idx->d[j];
+    }
 }

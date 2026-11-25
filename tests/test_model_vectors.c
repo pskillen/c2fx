@@ -19,7 +19,10 @@
  */
 #define W0_ABS_TOL 1e-6
 #define LSP_ABS_TOL_TONE 0.05
-#define LSP_ABS_TOL_SPEECH 0.5
+/* Mean of the per-frame maximum LSP error on the speech sets is 0.022 to 0.080
+ * rad. The worst is high_voice at 0.0798. 0.09 sits just above that.
+ */
+#define LSP_ABS_TOL_SPEECH 0.09
 
 #define MAX_SETS 64
 #define NAME_LEN 256
@@ -344,7 +347,7 @@ int main(void)
 
     printf("alignment: codec frame k <-> CSV rows 2k (sub-frame a) and 2k+1 (sub-frame b)\n");
     printf("compare: decoded sub-frame b w0 and LSPs vs CSV;"
-           " w0 tol %g; LSP tol %.2f tone / %.1f speech (per-frame max rad)\n",
+           " w0 tol %g; LSP tol %.2f tone / %.2f speech (per-frame max rad)\n",
            W0_ABS_TOL, LSP_ABS_TOL_TONE, LSP_ABS_TOL_SPEECH);
     for (int i = 0; i < count; i++) {
         if (check_set(dir, names[i]) != 0) {
