@@ -381,7 +381,7 @@ static int check_pcm(const char *dir, const char *pcm_name, int voice, c2m_tally
     return failed;
 }
 
-static int scan_dir(const char *dir, int voice, c2m_tally *pool)
+static int scan_dir(const char *dir, int voice, int expect_count, c2m_tally *pool)
 {
     DIR *dp = opendir(dir);
     struct dirent *ent;
@@ -412,6 +412,10 @@ static int scan_dir(const char *dir, int voice, c2m_tally *pool)
             failed = 1;
         }
     }
+    if (count != expect_count) {
+        fprintf(stderr, "expected %d pcm files in %s, found %d\n", expect_count, dir, count);
+        failed = 1;
+    }
     return failed;
 }
 
@@ -440,8 +444,8 @@ int main(void)
         "lsd_ours",
         "margin"
     );
-    failed = scan_dir("tests/data/voice", 1, &pool);
-    if (scan_dir("tests/data/signals", 0, &pool) != 0) {
+    failed = scan_dir("tests/data/voice", 1, 4, &pool);
+    if (scan_dir("tests/data/signals", 0, 10, &pool) != 0) {
         failed = 1;
     }
     format_pct(wbuf, sizeof wbuf, pool.w_ok, pool.w_n);
