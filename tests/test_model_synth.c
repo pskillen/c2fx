@@ -398,9 +398,94 @@ static int test_deterministic(void)
     return 0;
 }
 
+/* Phase relation of spec 7: harmonic m has phase m * phi1 + minphase(bin m), so
+ * phase(m) - m * phase(1) = minphase(m) - m * minphase(1), whatever phi1 is.
+ * Harmonic phase is read from the pre-OLA block (centered on index 80) with a
+ * Hann-weighted projection onto each harmonic's own frequency. Leakage from the
+ * neighbors and the 160-sample window set the tolerance (measured 0.024 rad
+ * worst case on this frame, limit 0.1; a wrong phase model is off by radians).
+ */
+static double wrap_pi(double x)
+{
+    while (x > C2M_PI) {
+        x -= 2.0 * C2M_PI;
+    }
+    while (x < -C2M_PI) {
+        x += 2.0 * C2M_PI;
+    }
+    return x;
+}
+
+static double block_phase(const double block[C2M_FRAME_SAMPLES], int bin)
+{
+    double omega = 2.0 * C2M_PI * (double)bin / (double)C2M_DFT_SIZE;
+    double re = 0.0;
+    double im = 0.0;
+
+    for (int n = -C2M_HOP; n < C2M_HOP; n++) {
+        double w = 0.5 + 0.5 * cos(C2M_PI * (double)n / (double)C2M_HOP);
+        double x = block[n + C2M_HOP] * w;
+
+        re += x * cos(omega * (double)n);
+        im -= x * sin(omega * (double)n);
+    }
+    return atan2(im, re);
+}
+
+static int test_harmonic_phase(void)
+{
+    c2m_indices idx;
+    c2m_decode st;
+    c2m_subframe sub[2];
+    double a[C2M_LPC_ORDER + 1];
+    double power[C2M_SPECTRUM_BINS];
+    double minphase[C2M_SPECTRUM_BINS + 1];
+    double block[C2M_FRAME_SAMPLES];
+    int bin1;
+    int worst_bin = 0;
+    double worst = 0.0;
+
+    idx.v_a = 1;
+    idx.v_b = 1;
+    idx.i = 40;
+    idx.e = 22;
+    for (int j = 0; j < C2M_LSP_ORDER; j++) {
+        idx.d[j] = 0;
+    }
+    c2m_decode_init(&st);
+    c2m_decode_frame(&st, &idx, sub);
+    c2m_lsp_to_lpc(sub[0].lsp_rad, a);
+    c2m_lpc_power(a, power);
+    c2m_min_phase(power, minphase);
+    bin1 = (int)floor(sub[0].w0 * (double)C2M_DFT_SIZE / (2.0 * C2M_PI) + 0.5);
+    for (int blk = 0; blk < 12; blk++) {
+        double ph1;
+
+        c2m_synth_block(&st, &sub[0], block);
+        ph1 = block_phase(block, bin1);
+        for (int m = 2; m <= 6; m++) {
+            int bin = (int)floor((double)m * sub[0].w0 * (double)C2M_DFT_SIZE /
+                                 (2.0 * C2M_PI) + 0.5);
+            double got = wrap_pi(block_phase(block, bin) - (double)m * ph1);
+            double expect = wrap_pi(minphase[bin] - (double)m * minphase[bin1]);
+            double err = fabs(wrap_pi(got - expect));
+
+            if (err > worst) {
+                worst = err;
+                worst_bin = bin;
+            }
+        }
+    }
+    if (worst > 0.1) {
+        fprintf(stderr, "harmonic phase off by %.3f rad at bin %d (limit 0.1)\n", worst, worst_bin);
+        return 1;
+    }
+    return 0;
+}
+
 int main(void)
 {
-    if (test_min_phase_lpc() != 0 || test_phi1_scaling() != 0 || test_periodic() != 0 ||
+    if (test_min_phase_lpc() != 0 || test_phi1_scaling() != 0 || test_harmonic_phase() != 0 || test_periodic() != 0 ||
         test_voiced_rng_idle() != 0 || test_overlap_constant() != 0 || test_lost() != 0 ||
         test_lost_noise_floor_hook() != 0 || test_deterministic() != 0) {
         return 1;

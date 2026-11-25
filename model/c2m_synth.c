@@ -23,7 +23,7 @@ void c2m_ola_hop(double ola[C2M_HOP], const double block[C2M_FRAME_SAMPLES], dou
     }
 }
 
-static void synth_block(c2m_decode *st, const c2m_subframe *sub, double block[C2M_FRAME_SAMPLES])
+void c2m_synth_block(c2m_decode *st, const c2m_subframe *sub, double block[C2M_FRAME_SAMPLES])
 {
     double a[C2M_LPC_ORDER + 1];
     double lpc_power[C2M_SPECTRUM_BINS];
@@ -193,7 +193,7 @@ void c2m_decode_pcm(c2m_decode *st, const c2m_indices *idx, int16_t out[C2M_FRAM
 
     c2m_decode_frame(st, idx, sub);
     for (int s = 0; s < 2; s++) {
-        synth_block(st, &sub[s], block);
+        c2m_synth_block(st, &sub[s], block);
         c2m_ola_hop(st->ola, block, hop);
         for (int n = 0; n < C2M_HOP; n++) {
             out[s * C2M_HOP + n] = sat_round(hop[n]);
