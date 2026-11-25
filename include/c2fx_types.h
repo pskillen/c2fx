@@ -80,8 +80,20 @@ struct c2fx_dec_scratch {
     c2fx_subframe sub[2];
 };
 
+#define C2FX_ANALYSIS_CENTER 139
+#define C2FX_ANALYSIS_LEN (2 * C2FX_ANALYSIS_CENTER + 1)
+
+/* Temporary encoder LPC buffers. */
+struct c2fx_enc_scratch {
+    int32_t windowed[C2FX_ANALYSIS_LEN];
+    int64_t r[C2FX_LSP_ORDER + 1];
+    int64_t a[C2FX_LSP_ORDER + 1];
+    int64_t poly[C2FX_LSP_ORDER / 2 + 1];
+};
+
 union c2fx_scratch {
     struct c2fx_dec_scratch dec;
+    struct c2fx_enc_scratch enc;
 };
 
 typedef struct c2fx_dec c2fx_dec_t;

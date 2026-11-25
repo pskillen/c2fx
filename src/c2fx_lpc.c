@@ -36,7 +36,7 @@ static int32_t sin_quadrant_q30(uint32_t z)
 }
 
 /* cos(phase), 2^32 = one turn, Q30. */
-static int32_t cos_q30(uint32_t phase)
+int32_t c2fx_cos_q30(uint32_t phase)
 {
     uint32_t quad = phase >> 30;
     uint32_t z = phase & 0x3fffffffu;
@@ -160,10 +160,10 @@ void c2fx_lsp_to_lpc(
     }
 
     for (int j = 0; j < C2FX_LSP_ORDER; j += 2) {
-        mul_quadratic(p, &p_order, &p_q, cos_q30(phase_from_q1(lsp_q1[j])), next);
+        mul_quadratic(p, &p_order, &p_q, c2fx_cos_q30(phase_from_q1(lsp_q1[j])), next);
     }
     for (int j = 1; j < C2FX_LSP_ORDER; j += 2) {
-        mul_quadratic(q, &q_order, &q_q, cos_q30(phase_from_q1(lsp_q1[j])), next);
+        mul_quadratic(q, &q_order, &q_q, c2fx_cos_q30(phase_from_q1(lsp_q1[j])), next);
     }
 
     if (p_q > q_q) {

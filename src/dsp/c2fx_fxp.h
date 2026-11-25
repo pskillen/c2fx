@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The RadioFoundry Authors
 // Copyright (c) 2026 The c2fx Authors
-// 32x32 products. Callers stay in 32-bit accumulators; a wide product lives
-// only inside these helpers (RadioFoundry fxp_mulshr / fxp_mulshr16).
+// Fixed-point products and wide accumulators. The narrow multiply-shift
+// helpers follow RadioFoundry fxp_mulshr / fxp_mulshr16.
 
 #ifndef C2FX_FXP_H
 #define C2FX_FXP_H
@@ -112,6 +112,36 @@ static inline uint64_t c2fx_umul64_hi(uint64_t a, uint64_t b)
     uint64_t mid = (p00 >> 32) + (p01 & UINT64_C(0xffffffff)) + (p10 & UINT64_C(0xffffffff));
 
     return p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32);
+}
+
+/* Callers bound the products and partial sums to int64_t. */
+static inline int64_t c2fx_mac32(int64_t acc, int32_t a, int32_t b)
+{
+    return acc + (int64_t)a * b;
+}
+
+static inline int64_t c2fx_add64(int64_t a, int64_t b)
+{
+    return a + b;
+}
+
+static inline uint64_t c2fx_abs64(int64_t x)
+{
+    return x < 0 ? 0u - (uint64_t)x : (uint64_t)x;
+}
+
+/* Signed 64x64 product shifted toward zero. 1 <= shift < 64; the shifted
+ * magnitude fits in int64_t. The unsigned low product wraps by design.
+ */
+static inline int64_t c2fx_mulshr64(int64_t a, int64_t b, int shift)
+{
+    uint64_t am = c2fx_abs64(a);
+    uint64_t bm = c2fx_abs64(b);
+    uint64_t hi = c2fx_umul64_hi(am, bm);
+    uint64_t lo = am * bm;
+    int64_t mag = (int64_t)((hi << (64 - shift)) | (lo >> shift));
+
+    return (a < 0) != (b < 0) ? -mag : mag;
 }
 
 /* floor(2^64 / d) + 1. The LPC cosine is the only caller.

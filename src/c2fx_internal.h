@@ -14,6 +14,26 @@ void c2fx_front_init(c2fx_front *st);
 /* Voicing, w0, energy and LSPs for sub-frame a (out[0]) and b (out[1]). */
 void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe out[2]);
 
+/* LPC analysis result. Energy is signed log2(G^2) in Q24, within
+ * [-93, 22) for nonzero power, or INT32_MIN for zero. LSPs are
+ * frequencies in Q16 Hz, from 0 to 4000 Hz.
+ */
+typedef struct c2fx_enc_row {
+    int32_t energy_log2_q24;
+    int32_t lsp_hz_q16[C2FX_LSP_ORDER];
+} c2fx_enc_row;
+
+/* One 10 ms row, with the 279-sample window centered at x[139].
+ * The caller zero-pads outside the input.
+ */
+void c2fx_lpc_analyze(const int16_t x[C2FX_ANALYSIS_LEN],
+                      c2fx_enc_row *row, struct c2fx_enc_scratch *s);
+int c2fx_quant_energy_index(const c2fx_enc_row *row);
+void c2fx_quant_lsp_indices(const c2fx_enc_row *row, int d[C2FX_LSP_ORDER]);
+
+/* High-precision cosine for the LPC conversions (2^32 per turn). */
+int32_t c2fx_cos_q30(uint32_t phase);
+
 /* LPC from LSPs. wide[k] / 2^q is coefficient k. Q27 starts the scale; q
  * shifts down to Q21..Q25 on real frames. |a| on real frames exceeds 8, which
  * a saturated Q12 copy cannot hold. quad is 3 * (C2FX_LSP_ORDER + 3) words:

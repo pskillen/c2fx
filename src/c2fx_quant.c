@@ -120,3 +120,57 @@ void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe o
         st->prev_lsp_q1[j] = cur_q1[j];
     }
 }
+
+/* Midpoints between adjacent energy levels (spec 10.1.3), rounded
+ * up to the Q24 log2 grid. Entry k is
+ * ceil(((-10 + (k + 0.5) * 50/32) / 10) * log2(10) * 2^24).
+ */
+static const int32_t energy_midpoints_q24[31] = {
+    -51378587, -42670352, -33962117, -25253882, -16545646,
+    -7837411, 870824, 9579059, 18287294, 26995530,
+    35703765, 44412000, 53120235, 61828470, 70536705,
+    79244941, 87953176, 96661411, 105369646, 114077881,
+    122786117, 131494352, 140202587, 148910822, 157619057,
+    166327293, 175035528, 183743763, 192451998, 201160233,
+    209868468,
+};
+
+int c2fx_quant_energy_index(const c2fx_enc_row *row)
+{
+    int lo = 0;
+    int hi = 31;
+
+    /* The first midpoint above this row's energy is its index.
+     * Exactly on a midpoint, the model takes the higher index.
+     */
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+
+        if (row->energy_log2_q24 < energy_midpoints_q24[mid]) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return lo;
+}
+
+void c2fx_quant_lsp_indices(const c2fx_enc_row *row, int d[C2FX_LSP_ORDER])
+{
+    int32_t sum = 0;
+
+    for (int j = 0; j < C2FX_LSP_ORDER; j++) {
+        const int16_t *tab = c2fx_lsp_tab[j];
+        int32_t target = row->lsp_hz_q16[j] - sum * 65536;
+        int k = 0;
+
+        /* The table is increasing. Stop at the first midpoint at or
+         * above the target, so a tie selects the lower entry.
+         */
+        while (k < 31 && target > ((int32_t)tab[k] + tab[k + 1]) * 32768) {
+            k++;
+        }
+        d[j] = k;
+        sum += tab[k];
+    }
+}
