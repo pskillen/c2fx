@@ -113,9 +113,13 @@ $(BUILD)/test_model_synth: tests/test_model_synth.c $(MODEL_OBJS) $(wildcard mod
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_model_vs_c2dec: tests/test_model_vs_c2dec.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+$(BUILD)/test_lsd_helper.o: tests/test_lsd_helper.c tests/test_lsd_helper.h $(wildcard model/*.h) $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
-	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Itests -c $< -o $@
+
+$(BUILD)/test_model_vs_c2dec: tests/test_model_vs_c2dec.c tests/test_lsd_helper.h $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Itests $< $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 $(BUILD)/test_model_quant_enc: tests/test_model_quant_enc.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
@@ -125,9 +129,9 @@ $(BUILD)/test_model_rules: tests/test_model_rules.c $(MODEL_OBJS) $(wildcard mod
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_model_encoder: tests/test_model_encoder.c $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+$(BUILD)/test_model_encoder: tests/test_model_encoder.c tests/test_lsd_helper.h $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(wildcard model/*.h) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
-	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Itests $< $(BUILD)/test_lsd_helper.o $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 $(BUILD)/test_version: tests/test_version.c $(BUILD)/libc2fx.a include/c2fx.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)

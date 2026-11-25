@@ -6,6 +6,7 @@
 #include "c2m_analysis.h"
 #include "c2m_encode.h"
 #include "c2m_lpc.h"
+#include "test_lsd_helper.h"
 
 #include <dirent.h>
 #include <math.h>
@@ -13,8 +14,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Spec 10.3. Voice files are asserted. Signal files are measured only.
- * Energy is not asserted on the six OQ-10 files named in 10.3.
+/* Spec 10.3. Voice: voicing, energy and input LSD are asserted; w0, octave and
+ * LSP-tail columns are report-only (provisional until the owner's listening test).
+ * Signal files are measured only. Energy is not asserted on the six OQ-10 files.
  */
 
 #define MAX_SETS 64
@@ -190,11 +192,6 @@ static int at_least(int num, int den, int percent)
     return num * 100 >= den * percent;
 }
 
-static int at_most_percent(int num, int den, int percent)
-{
-    return num * 100 <= den * percent;
-}
-
 static int check_pcm(const char *dir, const char *pcm_name, int voice, c2m_tally *pool)
 {
     char base[NAME_LEN];
@@ -214,6 +211,12 @@ static int check_pcm(const char *dir, const char *pcm_name, int voice, c2m_tally
     char ebuf[16];
     char obuf[16];
     char lspbuf[16];
+    int16_t *dec_ours = NULL;
+    int16_t *dec_ref = NULL;
+    long dec_count = 0;
+    int lsd_frames = 0;
+    double lsd_ref = -1.0;
+    double lsd_ours = -1.0;
 
     memset(&tally, 0, sizeof tally);
     if (!ends_with(pcm_name, ".pcm")) {
@@ -299,25 +302,67 @@ static int check_pcm(const char *dir, const char *pcm_name, int voice, c2m_tally
     } else {
         snprintf(lspbuf, sizeof lspbuf, "%.2f", 100.0 * (double)tally.lsp_over / (double)tally.lsp_n);
     }
-    printf(
-        "%-22s %8s %8s %8s %8.2f %8s %8s\n",
-        base,
-        wbuf,
-        vbuf,
-        ebuf,
-        tally.lsp_n == 0 ? 0.0 : tally.lsp_sum / (double)tally.lsp_n,
-        lspbuf,
-        obuf
-    );
     if (voice) {
-        if (tally.w_n > 0 && !at_least(tally.w_ok, tally.w_n, 90)) {
-            fprintf(stderr, "%s w0 within +-2 is %d/%d, bar 90%%\n", base, tally.w_ok, tally.w_n);
+        if (c2m_test_decode_c2(ours, (size_t)frames * C2M_FRAME_BYTES, &dec_ours, &dec_count) != 0 ||
+            c2m_test_decode_c2(ref, ref_n, &dec_ref, &dec_count) != 0) {
+            fprintf(stderr, "%s decode for LSD failed\n", base);
             failed = 1;
-        }
-        if (tally.w_n > 0 && !at_most_percent(tally.oct, tally.w_n, 2)) {
-            fprintf(stderr, "%s octave errors are %d/%d, bar 2%%\n", base, tally.oct, tally.w_n);
+        } else if (dec_count != (long)n) {
+            fprintf(stderr, "%s decoded sample count mismatch\n", base);
             failed = 1;
+        } else {
+            lsd_ref = c2m_test_mean_lsd(dec_ref, pcm, pcm, dec_count, &lsd_frames);
+            lsd_ours = c2m_test_mean_lsd(dec_ours, pcm, pcm, dec_count, &lsd_frames);
+            if (lsd_frames == 0) {
+                fprintf(stderr, "%s has no voiced frames for input LSD\n", base);
+                failed = 1;
+            } else if (lsd_ours > lsd_ref + C2M_TEST_INPUT_LSD_MARGIN_DB) {
+                fprintf(
+                    stderr,
+                    "%s LSD vs input %.3f dB exceeds reference %.3f dB + %.1f\n",
+                    base,
+                    lsd_ours,
+                    lsd_ref,
+                    C2M_TEST_INPUT_LSD_MARGIN_DB
+                );
+                failed = 1;
+            }
         }
+    }
+    {
+        char lsd_ref_buf[16];
+        char lsd_ours_buf[16];
+        char margin_buf[16];
+
+        if (voice && lsd_frames > 0) {
+            snprintf(lsd_ref_buf, sizeof lsd_ref_buf, "%.3f", lsd_ref);
+            snprintf(lsd_ours_buf, sizeof lsd_ours_buf, "%.3f", lsd_ours);
+            snprintf(
+                margin_buf,
+                sizeof margin_buf,
+                "%.3f",
+                lsd_ref + C2M_TEST_INPUT_LSD_MARGIN_DB - lsd_ours
+            );
+        } else {
+            snprintf(lsd_ref_buf, sizeof lsd_ref_buf, "n/a");
+            snprintf(lsd_ours_buf, sizeof lsd_ours_buf, "n/a");
+            snprintf(margin_buf, sizeof margin_buf, "n/a");
+        }
+        printf(
+            "%-22s %8s %8s %8s %8.2f %8s %8s %8s %8s %8s\n",
+            base,
+            wbuf,
+            vbuf,
+            ebuf,
+            tally.lsp_n == 0 ? 0.0 : tally.lsp_sum / (double)tally.lsp_n,
+            lspbuf,
+            obuf,
+            lsd_ref_buf,
+            lsd_ours_buf,
+            margin_buf
+        );
+    }
+    if (voice) {
         if (!at_least(tally.v_ok, tally.v_bits, 90)) {
             fprintf(stderr, "%s voicing agreement is %d/%d, bar 90%%\n", base, tally.v_ok, tally.v_bits);
             failed = 1;
@@ -326,21 +371,10 @@ static int check_pcm(const char *dir, const char *pcm_name, int voice, c2m_tally
             fprintf(stderr, "%s energy within +-1 is %d/%d, bar 95%%\n", base, tally.e_ok, tally.e_n);
             failed = 1;
         }
-        if (tally.lsp_n == 0 || tally.lsp_sum / (double)tally.lsp_n > 1.5) {
-            fprintf(
-                stderr,
-                "%s LSP mean is %.3f dB, bar 1.5 dB\n",
-                base,
-                tally.lsp_n == 0 ? 0.0 : tally.lsp_sum / (double)tally.lsp_n
-            );
-            failed = 1;
-        }
-        if (!at_most_percent(tally.lsp_over, tally.lsp_n, 2)) {
-            fprintf(stderr, "%s LSP over 4 dB is %d/%d, bar 2%%\n", base, tally.lsp_over, tally.lsp_n);
-            failed = 1;
-        }
     }
     add_tally(pool, &tally, count_energy);
+    free(dec_ours);
+    free(dec_ref);
     free(ours);
     free(pcm);
     free(ref);
@@ -392,15 +426,19 @@ int main(void)
     int failed;
 
     memset(&pool, 0, sizeof pool);
+    /* w0, octave and LSP-tail bars are report-only until the owner's listening test. */
     printf(
-        "%-22s %8s %8s %8s %8s %8s %8s\n",
+        "%-22s %8s %8s %8s %8s %8s %8s %8s %8s %8s\n",
         "file",
         "w0",
         "voicing",
         "energy",
         "lsp_dB",
         "lsp>4%",
-        "octave"
+        "octave",
+        "lsd_ref",
+        "lsd_ours",
+        "margin"
     );
     failed = scan_dir("tests/data/voice", 1, &pool);
     if (scan_dir("tests/data/signals", 0, &pool) != 0) {
@@ -416,14 +454,17 @@ int main(void)
         snprintf(lspbuf, sizeof lspbuf, "%.2f", 100.0 * (double)pool.lsp_over / (double)pool.lsp_n);
     }
     printf(
-        "%-22s %8s %8s %8s %8.2f %8s %8s\n",
+        "%-22s %8s %8s %8s %8.2f %8s %8s %8s %8s %8s\n",
         "pooled",
         wbuf,
         vbuf,
         ebuf,
         pool.lsp_n == 0 ? 0.0 : pool.lsp_sum / (double)pool.lsp_n,
         lspbuf,
-        obuf
+        obuf,
+        "n/a",
+        "n/a",
+        "n/a"
     );
     return failed ? 1 : 0;
 }
