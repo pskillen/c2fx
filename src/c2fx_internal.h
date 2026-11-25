@@ -22,8 +22,9 @@ typedef struct c2fx_indices {
  * lsp_q1 is Hz times 2 (the 0.5 Hz unit). w0 is the phase step, 2^32 = one
  * turn. energy_log2_q11 is log2 of the linear power. amp_log2_q11[m - 1] is
  * log2 of harmonic m's amplitude in Q11; int16 saturation caps near 2^16
- * linear (about 96 dB), below waveform clip. pitch_key / pitch_mid select the band
- * edges: a grid index, or the sum of the two indices when w0 was averaged.
+ * linear (about 96 dB), below waveform clip. pitch_key is the w0 index,
+ * or the sum of the two indices when w0 was averaged. pitch_mid says which.
+ * Band edges and the harmonic bin are exact rationals of that key.
  */
 typedef struct c2fx_subframe {
     int voiced;
@@ -31,11 +32,6 @@ typedef struct c2fx_subframe {
     int count;
     int pitch_key;
     int pitch_mid;
-    /* When pitch_mid is set, pitch_prev is the previous frame's w0 index
-     * and pitch_key is the sum of the two indices. The split matters for
-     * the double-rounded harmonic bin; the sum alone does not.
-     */
-    int pitch_prev;
     int16_t energy_log2_q11;
     int16_t lsp_q1[C2FX_LSP_ORDER];
     int16_t amp_log2_q11[C2FX_MAX_HARMONICS];
