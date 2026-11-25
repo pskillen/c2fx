@@ -58,4 +58,25 @@ void c2m_dequant(const c2m_indices *idx, c2m_params *out);
 /* Linear power 10^((C2M_E_MIN_DB + rel_db) / 10). rel_db is energy_db. */
 double c2m_energy_power(double rel_db);
 
+/* Spec 10.1.2. w0 is radians per sample. */
+int c2m_quant_w0_index(double w0);
+
+/* Spec 10.1.3. energy is G^2. Non-positive energy is index 0. */
+int c2m_quant_energy_index(double energy);
+
+/* Spec 10.1.4. lsp_rad is ten ordered frequencies. An exact midpoint, which
+ * the measurements did not produce, takes the lower index ([c2fx design]).
+ */
+void c2m_quant_lsp_indices(const double lsp_rad[C2M_LSP_ORDER], int d[C2M_LSP_ORDER]);
+
+/* Spec 10.1.1 and 10.1.5. voiced_a is row 2k, the rest is row 2k+1. */
+void c2m_quant_encode(
+    int voiced_a,
+    int voiced_b,
+    double w0_b,
+    double energy_b,
+    const double lsp_rad_b[C2M_LSP_ORDER],
+    c2m_indices *idx
+);
+
 #endif
