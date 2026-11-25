@@ -231,10 +231,10 @@ static void rot_by(int32_t *re, int32_t *im, int32_t cr, int32_t ci)
 }
 
 /* log2(|A|^2) or log2(|A|^2 + 1e-6) at the 256 bins of a 512-point DFT.
- * The other 501 samples are zero, so each bin is the 11-tap polynomial at
- * that frequency. A Q15 FFT loses the cancellation on sharp frames (the
- * residual is a few thousand counts against twiddle error of the same
- * size). This rotation is Q30, and coeff[k] / 2^q is the real coefficient.
+ * Not an FFT: the other 501 samples are zero, so each bin is the 11-tap
+ * polynomial at that frequency. A Q15 FFT loses the cancellation on sharp
+ * frames (the residual is a few thousand counts, the same size as the
+ * twiddle error). This rotation is Q30, and coeff[k] / 2^q is the coefficient.
  */
 static void fft_log_power(const int32_t coeff[11], int q, int floored, int32_t out[SPECTRUM_BINS])
 {
@@ -266,117 +266,19 @@ static void fft_log_power(const int32_t coeff[11], int q, int floored, int32_t o
     }
 }
 
-/* The rational band edge is exact. The float model evaluates
- * floor((m ± 0.5) * scale + 0.5) in double, with scale = w0 * 512 / (2*pi)
- * and a midpoint w0 averaged in double. When that edge is an integer, the
- * double product is either that integer or one ulp under it, never over.
- * Which integers drop depends on the index sum. A midpoint drops only for
- * some splits of that sum; the bit is the earlier index.
- * Grid index 8 is the same pitch as sum 16, index 88 as sum 176.
+/* trunc((m ± 0.5) * w0 / r + 0.5) on the exact rational.
+ * Grid: w0 scale = (128 + 7*index) / 40, and numer = 2*(m ± 0.5),
+ * so the edge is (numer * (128 + 7*index) + 40) / 80.
+ * Midpoint of two indices uses their sum: scale (256 + 7*sum) / 80,
+ * edge (numer * (256 + 7*sum) + 80) / 160.
+ * An exact integer stays that integer.
  */
-static int split_drops(int sum, int i0)
-{
-    /* Bit (i0 - lo), lo = max(0, sum - 127). Sum 16 drops on every split. */
-    static const uint8_t split_48[7] = {200, 128, 0, 0, 2, 38, 0};
-    static const uint8_t split_80[11] = {111, 246, 79, 118, 223, 246, 221, 228, 223, 236, 1};
-    static const uint8_t split_112[15] = {
-        69, 143, 34, 17, 96, 38, 68, 68, 200, 12, 16, 137, 226, 69, 1
-    };
-    static const uint8_t split_144[14] = {
-        83, 211, 163, 255, 255, 255, 127, 255, 255, 255, 255, 226, 101, 101
-    };
-    static const uint8_t split_176[10] = {66, 130, 34, 7, 145, 68, 112, 162, 32, 33};
-    const uint8_t *tab;
-    int lo;
-    int n;
-    int idx;
-
-    switch (sum) {
-    case 48:
-        tab = split_48;
-        lo = 0;
-        n = 49;
-        break;
-    case 80:
-        tab = split_80;
-        lo = 0;
-        n = 81;
-        break;
-    case 112:
-        tab = split_112;
-        lo = 0;
-        n = 113;
-        break;
-    case 144:
-        tab = split_144;
-        lo = 17;
-        n = 111;
-        break;
-    case 176:
-        tab = split_176;
-        lo = 49;
-        n = 79;
-        break;
-    default:
-        return 0;
-    }
-    idx = i0 - lo;
-    if ((unsigned)idx >= (unsigned)n) {
-        return 0;
-    }
-    return (tab[idx >> 3] >> (idx & 7)) & 1;
-}
-
-static int arith_edge(int edge, int origin, int step, int last)
-{
-    return edge >= origin && edge <= last && ((edge - origin) % step) == 0;
-}
-
-static int edge_in_drop_set(int sum, int edge)
-{
-    switch (sum) {
-    case 16:
-        return edge == 58 || edge == 104 || edge == 127 || edge == 196 || edge == 219 ||
-               edge == 242;
-    case 48:
-        return arith_edge(edge, 19, 37, 241);
-    case 80:
-        return edge == 128 || edge == 230;
-    case 112:
-        return edge == 7 || arith_edge(edge, 20, 13, 254);
-    case 144:
-        return edge == 119;
-    case 176:
-        return arith_edge(edge, 47, 93, 233);
-    default:
-        return 0;
-    }
-}
-
-static int band_edge(int numer, int key, int midpoint, int i0)
+static int band_edge(int numer, int key, int midpoint)
 {
     int num = midpoint ? 256 + 7 * key : 128 + 7 * key;
     int div = midpoint ? 160 : 80;
-    int p = numer * num + div / 2;
-    int edge = p / div;
-    int sum = 0;
-    int drop = 0;
+    int edge = (numer * num + div / 2) / div;
 
-    if (!midpoint) {
-        if (key == 8) {
-            sum = 16;
-            drop = 1;
-        } else if (key == 88) {
-            sum = 176;
-            drop = 1;
-        }
-    } else {
-        sum = key;
-        drop = key == 16 || split_drops(key, i0);
-    }
-    if ((p % div) == 0 && drop && edge_in_drop_set(sum, edge)) {
-        edge -= 1;
-    }
     if (edge < 0) {
         return 0;
     }
@@ -481,8 +383,8 @@ void c2fx_envelope(c2fx_subframe *sub)
     sub->count = count;
     scale_h1 = harm1_scaled(sub->pitch_key, sub->pitch_mid);
     for (int m = 1; m <= count; m++) {
-        int lo = band_edge(2 * m - 1, sub->pitch_key, sub->pitch_mid, sub->pitch_i0);
-        int hi = band_edge(2 * m + 1, sub->pitch_key, sub->pitch_mid, sub->pitch_i0);
+        int lo = band_edge(2 * m - 1, sub->pitch_key, sub->pitch_mid);
+        int hi = band_edge(2 * m + 1, sub->pitch_key, sub->pitch_mid);
         int32_t log_amp;
 
         if (hi <= lo) {

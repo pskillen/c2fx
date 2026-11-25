@@ -80,7 +80,6 @@ void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe o
     out[1].w0 = w0_from_index(idx->i);
     out[1].pitch_key = idx->i;
     out[1].pitch_mid = 0;
-    out[1].pitch_i0 = 0;
     out[1].energy_log2_q11 = energy_log2_q11[idx->e * 2];
     for (int j = 0; j < C2FX_LSP_ORDER; j++) {
         out[1].lsp_q1[j] = cur_q1[j];
@@ -107,12 +106,10 @@ void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe o
         out[0].w0 = w0_from_sum(st->prev_i + idx->i);
         out[0].pitch_key = st->prev_i + idx->i;
         out[0].pitch_mid = 1;
-        out[0].pitch_i0 = st->prev_i;
     } else {
         out[0].w0 = out[1].w0;
         out[0].pitch_key = idx->i;
         out[0].pitch_mid = 0;
-        out[0].pitch_i0 = 0;
     }
 
     st->ready = 1;

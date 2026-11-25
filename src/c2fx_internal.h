@@ -23,8 +23,6 @@ typedef struct c2fx_indices {
  * turn. energy_log2_q11 is log2 of the linear power. amp_log2_q11[m - 1] is
  * log2 of harmonic m's amplitude. pitch_key / pitch_mid select the band
  * edges: a grid index, or the sum of the two indices when w0 was averaged.
- * pitch_i0 is the earlier index of that pair; the model's double product
- * depends on the split, not only the sum.
  */
 typedef struct c2fx_subframe {
     int voiced;
@@ -32,7 +30,6 @@ typedef struct c2fx_subframe {
     int count;
     int pitch_key;
     int pitch_mid;
-    uint8_t pitch_i0;
     int16_t energy_log2_q11;
     int16_t lsp_q1[C2FX_LSP_ORDER];
     int16_t amp_log2_q11[C2FX_MAX_HARMONICS];
