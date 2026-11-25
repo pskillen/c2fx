@@ -42,6 +42,7 @@ the spec states every formula it uses.
 | `x16_pitch_behaviour.py` | Pulse trains from 55 to 600 Hz, and pure tones from 50 to 400 Hz | Pulse trains inside 50-400 Hz track; pure tones do not come back at the tone frequency |
 | `x17_voicing_bits.py` | Noise, pulses, and an 180 Hz tone plus noise at several SNRs | Bit 0 and bit 1 are the two 10 ms voicing flags; the mixture does not switch at 6 dB |
 | `x18_energy_crosslink.py` | The quantized energies in `vectors/*_params.csv` against `10^((-10 + e*50/32)/10)`; the decoder's level offset; refit with the offset fixed | `E_MIN_DB` = -10 dB, `E_MAX_DB` = 40 dB; synthesis gain 6.38 dB (best pair) or 5.91 dB (PDF pair), about a factor 2 |
+| `x19_lsp_spacing.py` | Frames with the lowest LSPs from 800 Hz apart down to 25 Hz, through `c2dec` and `build/c2m_dec`; candidate rules scored on tight and speech-like frames; overload sweep | The decoder adds a floor of about 1e-6 to the squared magnitude of the LPC polynomial before inverting it; at very high energy `c2dec`'s output falls instead of saturating |
 
 `c2sim` facts (I-3) were checked by hand, not scripted: `c2sim <raw> -o <out> --modelout <file>` writes one
 1300-byte record per 10 ms analysis frame (`float32 w0`, `int32 L`, `float32 A[161]`, `float32 phi[161]`,
