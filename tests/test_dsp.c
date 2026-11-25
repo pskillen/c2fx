@@ -88,17 +88,18 @@ static int test_cos(void)
 
     for (uint32_t i = 0; i < 65536u; i++) {
         uint32_t phase = i << 16;
-        double truth = cos(2.0 * 3.14159265358979323846 * (double)phase / 4294967296.0);
-        double got = (double)c2fx_cos(phase) / 32768.0;
+        /* Q15 with full scale 32767, as in RadioFoundry's mbe_sin_tab. */
+        double truth = 32767.0 * cos(2.0 * 3.14159265358979323846 * (double)phase / 4294967296.0);
+        double got = (double)c2fx_cos(phase);
         double err = fabs(got - truth);
 
         if (err > worst) {
             worst = err;
         }
     }
-    printf("cos: max error %.3f Q15 LSBs over 2^16 phases\n", worst * 32768.0);
-    if (worst * 32768.0 > 2.0) {
-        fprintf(stderr, "cos error %.3f Q15 LSBs above 2\n", worst * 32768.0);
+    printf("cos: max error %.3f Q15 LSBs over 2^16 phases\n", worst);
+    if (worst > 2.0) {
+        fprintf(stderr, "cos error %.3f Q15 LSBs above 2\n", worst);
         return 1;
     }
     return 0;

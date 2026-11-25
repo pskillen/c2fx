@@ -6,6 +6,8 @@
 
 #include "c2fx_dsp.h"
 
+#ifndef C2FX_EXTERNAL_DSP
+
 static int32_t sin_idx(uint32_t i)
 {
     uint32_t q = i & 255u;
@@ -107,3 +109,5 @@ int32_t c2fx_log2_q11(uint32_t x)
         (((uint32_t)(c2fx_log2_tab[i + 1] - c2fx_log2_tab[i]) * f) >> 10);
     return (e << 11) + (int32_t)(l >> 4);
 }
+
+#endif

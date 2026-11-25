@@ -52,7 +52,8 @@ static double snr_db(double sig, double err)
 }
 
 /* drop_lo..drop_hi inclusive are passed as lost frames. drop_lo < 0 disables. */
-static int run_file(const char *name, int drop_lo, int drop_hi, double *file_snr, double *worst_snr, int *max_abs)
+static int run_file(const char *name, int drop_lo, int drop_hi,
+                    double *file_snr, double *worst_snr, int *max_abs, int dump_pcm)
 {
     char path[128];
     FILE *fp;
@@ -99,6 +100,11 @@ static int run_file(const char *name, int drop_lo, int drop_hi, double *file_snr
             c2m_decode_pcm(&md, &idx, model);
             c2fx_decode(&dec, raw, fx, scratch);
         }
+        if (dump_pcm && fwrite(fx, sizeof fx[0], C2FX_FRAME_LEN, stdout) != C2FX_FRAME_LEN) {
+            fprintf(stderr, "%s: cannot write frame %d PCM\n", name, n);
+            fclose(fp);
+            return 1;
+        }
         for (int i = 0; i < C2FX_FRAME_LEN; i++) {
             double d = (double)model[i] - (double)fx[i];
             int ad = (int)model[i] - (int)fx[i];
@@ -135,16 +141,23 @@ static int run_file(const char *name, int drop_lo, int drop_hi, double *file_snr
     return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-    DIR *dp = opendir("vectors");
+    int dump_pcm = argc == 2 && strcmp(argv[1], "--pcm") == 0;
+    FILE *report = dump_pcm ? stderr : stdout;
+    DIR *dp;
     struct dirent *ent;
     char names[MAX_SETS][NAME_LEN];
     int count = 0;
     int failed = 0;
 
+    if (argc != 1 && !dump_pcm) {
+        fprintf(stderr, "usage: test_fx_decode [--pcm]\n");
+        return 2;
+    }
+    dp = opendir("vectors");
 #ifdef C2M_POSTFILTER_PDF
-    printf("SNR comparison skipped: libc2fx implements only the default post-filter pair\n");
+    fprintf(report, "SNR comparison skipped: libc2fx implements only the default post-filter pair\n");
 #endif
     if (dp == NULL) {
         fprintf(stderr, "cannot open vectors (run from the repository root)\n");
@@ -176,18 +189,22 @@ int main(void)
         int max_abs = 0;
         int drop_abs = 0;
 
-        if (run_file(names[s], -1, -1, &file_snr, &worst, &max_abs) != 0 ||
-            run_file(names[s], 10, 16, &drop_snr, &drop_worst, &drop_abs) != 0) {
+        if (run_file(names[s], -1, -1, &file_snr, &worst, &max_abs, dump_pcm) != 0 ||
+            run_file(names[s], 10, 16, &drop_snr, &drop_worst, &drop_abs, dump_pcm) != 0) {
             return 1;
         }
-        printf("%-24s file %6.2f dB  worst %6.2f dB  maxabs %5d  drop %6.2f dB  drop-worst %6.2f  drop-maxabs %d\n",
-               names[s], file_snr, worst, max_abs, drop_snr, drop_worst, drop_abs);
+        fprintf(report, "%-24s file %6.2f dB  worst %6.2f dB  maxabs %5d  drop %6.2f dB  drop-worst %6.2f  drop-maxabs %d\n",
+                names[s], file_snr, worst, max_abs, drop_snr, drop_worst, drop_abs);
 #ifndef C2M_POSTFILTER_PDF
         if (file_snr < SNR_BAR || worst < SNR_BAR || drop_snr < SNR_BAR || drop_worst < SNR_BAR) {
             fprintf(stderr, "%s: SNR below %.0f dB\n", names[s], SNR_BAR);
             failed = 1;
         }
 #endif
+    }
+    if (dump_pcm && fflush(stdout) != 0) {
+        fprintf(stderr, "cannot flush D3 PCM\n");
+        return 1;
     }
     return failed ? 1 : 0;
 }
