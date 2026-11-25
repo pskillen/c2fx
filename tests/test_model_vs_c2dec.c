@@ -303,7 +303,10 @@ static int check_set(const char *dir, const char *c2_name)
             }
             lsd_c2dec_input = mean_lsd(ref, input, input, count, &lsd_input_frames);
             lsd_ours_input = mean_lsd(model, input, input, count, &lsd_input_frames);
-            if (lsd_input_frames > 0 && lsd_ours_input > lsd_c2dec_input + INPUT_LSD_MARGIN_DB) {
+            if (lsd_input_frames == 0) {
+                fprintf(stderr, "%s has no voiced frames for input LSD\n", base);
+                failed = 1;
+            } else if (lsd_ours_input > lsd_c2dec_input + INPUT_LSD_MARGIN_DB) {
                 fprintf(
                     stderr,
                     "%s LSD vs input %.3f dB exceeds c2dec %.3f dB + %.1f\n",
@@ -315,14 +318,18 @@ static int check_set(const char *dir, const char *c2_name)
                 failed = 1;
             }
         }
+        if (voice && lsd_c2dec_frames == 0) {
+            fprintf(stderr, "%s has no voiced frames for c2dec LSD\n", base);
+            failed = 1;
+        }
         if (lsd_c2dec_frames == 0) {
             printf(
                 "%-22s  %8.3f  %8s  %8s  %8s\n",
                 base,
                 level_db,
                 "n/a",
-                voice ? "n/a" : "n/a",
-                voice ? "n/a" : "n/a"
+                "n/a",
+                "n/a"
             );
         } else if (voice) {
             printf(
@@ -337,7 +344,7 @@ static int check_set(const char *dir, const char *c2_name)
             printf("%-22s  %8.3f  %8.3f  %8s  %8s\n", base, level_db, lsd_vs_c2dec, "n/a", "n/a");
         }
         if (voice && fabs(level_db) > 1.5) {
-            fprintf(stderr, "%s level %.3f dB is outside ±1.5\n", base, level_db);
+            fprintf(stderr, "%s level %.3f dB is outside +/-1.5\n", base, level_db);
             failed = 1;
         }
         free(input);

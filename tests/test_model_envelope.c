@@ -54,29 +54,63 @@ static int test_rescale(void)
     double raw[C2M_SPECTRUM_BINS];
     double filtered[C2M_SPECTRUM_BINS];
     double sum_raw = 0.0;
+    double sum_filt = 0.0;
     double sum_out = 0.0;
-    double rel;
+    double scale;
+    double expect;
 
-    /* A mild one-pole filter. Its post-filter moves the bin sum, and the
-     * 1e-4 guard then leaves that sum within 1e-9 of the original.
-     */
+    /* Tiny P makes the 1e-4 spectrum guard dominate; rescale must match the closed form. */
     for (int k = 0; k <= C2M_LPC_ORDER; k++) {
         a[k] = 0.0;
     }
     a[0] = 1.0;
     a[1] = -0.1;
     c2m_lpc_power(a, raw);
-    c2m_postfilter_power(a, raw, filtered);
     for (int k = 0; k < C2M_SPECTRUM_BINS; k++) {
+        raw[k] = 1e-12;
         sum_raw += raw[k];
     }
+    for (int k = 0; k < C2M_SPECTRUM_BINS; k++) {
+        filtered[k] = 1.5e-12;
+    }
+    for (int k = 0; k < C2M_SPECTRUM_BINS; k++) {
+        sum_filt += filtered[k];
+    }
+    scale = (C2M_SPECTRUM_EPS + sum_raw) / (C2M_SPECTRUM_EPS + sum_filt);
+    expect = scale * sum_filt;
     c2m_rescale_power(raw, filtered, C2M_SPECTRUM_BINS);
     for (int k = 0; k < C2M_SPECTRUM_BINS; k++) {
         sum_out += filtered[k];
     }
-    rel = fabs(sum_out - sum_raw) / sum_raw;
-    if (!(rel < 1e-9)) {
-        fprintf(stderr, "post-filter rescale relative sum error %.3e\n", rel);
+    if (fabs(sum_out - expect) / expect > 1e-12) {
+        fprintf(stderr, "rescale sum %.6e expect %.6e\n", sum_out, expect);
+        return 1;
+    }
+    return 0;
+}
+
+static int test_postfilter_beta(void)
+{
+    double a[C2M_LPC_ORDER + 1];
+    double raw[C2M_SPECTRUM_BINS];
+    double filtered[C2M_SPECTRUM_BINS];
+    double rel_diff = 0.0;
+    double energy_db;
+
+    if (example_lpc(a, &energy_db) != 0) {
+        return 1;
+    }
+    c2m_lpc_power(a, raw);
+    c2m_postfilter_power(a, raw, filtered);
+    for (int k = 0; k < C2M_SPECTRUM_BINS; k++) {
+        double rel = fabs(filtered[k] - raw[k]) / raw[k];
+
+        if (rel > rel_diff) {
+            rel_diff = rel;
+        }
+    }
+    if (!(rel_diff > 1e-4)) {
+        fprintf(stderr, "post filter beta left spectrum unchanged (rel %.3e)\n", rel_diff);
         return 1;
     }
     return 0;
@@ -228,7 +262,17 @@ static int check_set(const char *dir, const char *c2_name, double *worst)
             fclose(csv);
             return 1;
         }
+        c2m_params params;
+
         c2m_frame_unpack(raw, &idx);
+        c2m_dequant(&idx, &params);
+        if (fabs(params.energy_db - C2M_ENERGY_STEP_DB * (double)idx.e) > 1e-12) {
+            fprintf(stderr, "%s frame %d energy_db %.12g vs index %d\n",
+                    base, frame, params.energy_db, idx.e);
+            fclose(bits);
+            fclose(csv);
+            return 1;
+        }
         nearest_energy_index(energy_a, &rel_a);
         e_b = nearest_energy_index(energy_b, &rel_b);
         if (rel_a > *worst) {
@@ -313,7 +357,8 @@ static int test_energy_grid(void)
 
 int main(void)
 {
-    if (test_rescale() != 0 || test_bass_boost() != 0 || test_energy_grid() != 0) {
+    if (test_rescale() != 0 || test_bass_boost() != 0 || test_postfilter_beta() != 0 ||
+        test_energy_grid() != 0) {
         return 1;
     }
     return 0;
