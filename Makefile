@@ -86,6 +86,7 @@ $(BUILD)/%.o: src/%.c include/c2fx.h src/c2fx_internal.h $(BUILD)/cflags.stamp
 test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
 		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec \
 		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope \
+		$(BUILD)/test_fx_decode \
 		$(BUILD)/test_model_quant_enc $(BUILD)/test_model_encoder $(BUILD)/test_model_rules \
 		$(BUILD)/test_lsd_helper_self
 	$(BUILD)/test_version
@@ -98,6 +99,7 @@ test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUI
 	$(BUILD)/test_dsp
 	$(BUILD)/test_fx_frame
 	$(BUILD)/test_fx_envelope
+	$(BUILD)/test_fx_decode
 	$(BUILD)/test_model_quant_enc
 	$(BUILD)/test_model_rules
 	$(BUILD)/test_model_encoder
@@ -166,6 +168,10 @@ $(BUILD)/test_fx_frame: tests/test_fx_frame.c $(BUILD)/libc2fx.a $(MODEL_OBJS) s
 $(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc -Isrc/dsp $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_fx_decode: tests/test_fx_decode.c $(BUILD)/libc2fx.a $(MODEL_OBJS) include/c2fx.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
 sanitize:
 	$(MAKE) test BUILD=build/sanitize EXTRA_CFLAGS='-fsanitize=address,undefined'
