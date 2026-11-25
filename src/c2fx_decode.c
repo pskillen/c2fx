@@ -55,11 +55,16 @@ static void flush_tail(c2fx_dec_t *st, int32_t *work, int16_t *pcm)
 
 static void synthesize_frame(c2fx_dec_t *st, struct c2fx_dec_scratch *sc, int16_t *pcm)
 {
-    c2fx_envelope(&sc->sub[0], sc->log_den, sc->log_num, sc->log_p);
-    c2fx_envelope(&sc->sub[1], sc->log_den, sc->log_num, sc->log_p);
-    c2fx_synth_hop(&sc->sub[0], sc->work, sc->spec, &st->phi1, &st->rng, st->ola, pcm);
-    c2fx_synth_hop(
-        &sc->sub[1], sc->work, sc->spec, &st->phi1, &st->rng, st->ola, pcm + C2FX_HOP);
+    int32_t *log_den = sc->buffers.envelope.log_den;
+    int32_t *log_num = sc->buffers.envelope.log_num;
+    int32_t *log_p = sc->buffers.envelope.log_p;
+    int32_t *work = sc->buffers.synth.work;
+    int32_t *spec = sc->buffers.synth.spec;
+
+    c2fx_envelope(&sc->sub[0], log_den, log_num, log_p);
+    c2fx_envelope(&sc->sub[1], log_den, log_num, log_p);
+    c2fx_synth_hop(&sc->sub[0], work, spec, &st->phi1, &st->rng, st->ola, pcm);
+    c2fx_synth_hop(&sc->sub[1], work, spec, &st->phi1, &st->rng, st->ola, pcm + C2FX_HOP);
 }
 
 void c2fx_decode(c2fx_dec_t *d, const uint8_t *bits, int16_t pcm[C2FX_FRAME_LEN], c2fx_scratch_t *scratch)
@@ -71,7 +76,7 @@ void c2fx_decode(c2fx_dec_t *d, const uint8_t *bits, int16_t pcm[C2FX_FRAME_LEN]
     if (bits == NULL) {
         if (!c2fx_lost_take(d, &idx, &flush)) {
             if (flush) {
-                flush_tail(d, sc->work, pcm);
+                flush_tail(d, sc->buffers.synth.work, pcm);
             } else {
                 write_silence(d, pcm);
             }

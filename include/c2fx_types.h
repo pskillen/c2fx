@@ -63,11 +63,20 @@ struct c2fx_dec {
 
 /* Temporary decoder buffers. */
 struct c2fx_dec_scratch {
-    int32_t work[C2FX_DFT];
-    int32_t spec[C2FX_DFT];
-    int32_t log_den[256];
-    int32_t log_num[256];
-    int32_t log_p[256];
+    /* Both envelope calls finish before synthesis writes work or spec.
+     * The log arrays are dead at that point; the results live in sub.
+     */
+    union {
+        struct {
+            int32_t work[C2FX_DFT];
+            int32_t spec[C2FX_DFT];
+        } synth;
+        struct {
+            int32_t log_den[256];
+            int32_t log_num[256];
+            int32_t log_p[256];
+        } envelope;
+    } buffers;
     c2fx_subframe sub[2];
 };
 
