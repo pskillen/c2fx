@@ -10,7 +10,7 @@
 
 /* int16 saturation. The positive clip observed on speech is +32767. */
 #define C2M_SAMPLE_MAX 32767.0
-#define C2M_SAMPLE_MIN (-32768.0)
+#define C2M_SAMPLE_MIN (-32767.0)
 
 void c2m_ola_hop(double ola[C2M_HOP], const double block[C2M_FRAME_SAMPLES], double out[C2M_HOP])
 {
@@ -90,7 +90,7 @@ static void synth_block(c2m_decode *st, const c2m_subframe *sub, double block[C2
             c = next_c;
         }
     }
-    /* Block centred on index 0: rising half from the end, falling half from the start. */
+    /* Block centered on index 0: rising half from the end, falling half from the start. */
     for (int n = 0; n < C2M_HOP; n++) {
         block[n] = y[C2M_DFT_SIZE - C2M_HOP + n];
         block[C2M_HOP + n] = y[n];
@@ -107,6 +107,23 @@ static int16_t sat_round(double x)
     return (int16_t)round(x);
 }
 
+/* After the repeat limit, play the stored overlap tail out once (zero block). */
+static void flush_lost_tail(c2m_decode *st, int16_t out[C2M_FRAME_SAMPLES])
+{
+    double block[C2M_FRAME_SAMPLES];
+    double hop[C2M_HOP];
+
+    for (int n = 0; n < C2M_FRAME_SAMPLES; n++) {
+        block[n] = 0.0;
+    }
+    for (int s = 0; s < 2; s++) {
+        c2m_ola_hop(st->ola, block, hop);
+        for (int n = 0; n < C2M_HOP; n++) {
+            out[s * C2M_HOP + n] = sat_round(hop[n]);
+        }
+    }
+}
+
 static void write_silence(c2m_decode *st, int16_t out[C2M_FRAME_SAMPLES])
 {
     for (int n = 0; n < C2M_FRAME_SAMPLES; n++) {
@@ -121,7 +138,6 @@ static void write_silence(c2m_decode *st, int16_t out[C2M_FRAME_SAMPLES])
 static void restore_startup(c2m_decode *st)
 {
     uint32_t rng = st->rng;
-
     c2m_decode_init(st);
     st->rng = rng;
 }
@@ -158,7 +174,11 @@ void c2m_decode_pcm(c2m_decode *st, const c2m_indices *idx, int16_t out[C2M_FRAM
     if (idx == NULL) {
         idx = lost_frame(st, &repeated);
         if (idx == NULL) {
-            write_silence(st, out);
+            if (st->lost_run == C2M_LOST_MAX_FRAMES + 1) {
+                flush_lost_tail(st, out);
+            } else {
+                write_silence(st, out);
+            }
             restore_startup(st);
             return;
         }
