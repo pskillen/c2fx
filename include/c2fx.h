@@ -37,6 +37,13 @@ const char *c2fx_version(void);
 
 void c2fx_dec_init(c2fx_dec_t *d);
 
+/* On C-SKY builds that enable C2FX_CSKY_HILO, compile the HI/LO
+ * multiply bodies only into c2fx's own files with -Wa,-mdsp.
+ * The RTOS does not save HI and LO across a context switch. Call
+ * c2fx_encode and c2fx_decode from one task only. Nothing else that
+ * can preempt that task or be preempted by it may use HI/LO.
+ */
+
 /* bits == NULL means the frame was lost. pcm is one 20 ms frame.
  * scratch has C2FX_SCRATCH_BYTES bytes and is 8-byte aligned.
  */
