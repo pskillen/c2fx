@@ -7,7 +7,7 @@
 #include "c2fx_types.h"
 
 #define C2FX_VERSION_MAJOR 0
-#define C2FX_VERSION_MINOR 0
+#define C2FX_VERSION_MINOR 1
 #define C2FX_VERSION_PATCH 0
 
 /* One frame of PCM at 8 kHz. */
