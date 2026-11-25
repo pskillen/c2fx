@@ -12,14 +12,6 @@
 
 #define PI_Q30 3373259426u /* pi in Q30 */
 
-#define INV_U32_156 27531842u /* floor(2^32 / 156) + 1 */
-#define INV_U64_250 UINT64_C(73786976294838207) /* floor(2^64 / 250) + 1 */
-#define INV_U64_P30_6 UINT64_C(3074457345618258603) /* denominator 6 */
-#define INV_U64_P30_20 UINT64_C(922337203685477581) /* denominator 20 */
-#define INV_U64_P30_42 UINT64_C(439208192231179801) /* denominator 42 */
-#define INV_U64_P30_72 UINT64_C(256204778801521551) /* denominator 72 */
-#define INV_U64_P30_110 UINT64_C(167697673397359561) /* denominator 110 */
-
 /* sin(z * pi/2 / 2^30) in Q30, for z in 0..2^30. Horner form of the Taylor
  * series through theta^13:
  *   sin/theta = 1 - t/6*(1 - t/20*(1 - t/42*(1 - t/72*(1 - t/110*(1 - t/156)))))
@@ -33,13 +25,13 @@ static int32_t sin_quadrant_q30(uint32_t z)
 {
     uint32_t th = (uint32_t)(c2fx_umul32(z, PI_Q30) >> 31);
     uint32_t th2 = (uint32_t)c2fx_mulshr((int32_t)th, (int32_t)th, 30);
-    uint32_t s = (1u << 30) - c2fx_udiv32_inv(th2, INV_U32_156);
+    uint32_t s = (1u << 30) - c2fx_udiv32_inv(th2, C2FX_INV_U64_156);
 
-    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_110);
-    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_72);
-    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_42);
-    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_20);
-    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), INV_U64_P30_6);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), C2FX_INV_U64_P30_110, 110u);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), C2FX_INV_U64_P30_72, 72u);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), C2FX_INV_U64_P30_42, 42u);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), C2FX_INV_U64_P30_20, 20u);
+    s = (1u << 30) - c2fx_udiv_p30_inv(c2fx_umul32(th2, s), C2FX_INV_U64_P30_6, 6u);
     return c2fx_mulshr((int32_t)th, (int32_t)s, 30);
 }
 
@@ -61,14 +53,14 @@ static int32_t cos_q30(uint32_t phase)
     return mag;
 }
 
-/* (coeff * -2*cos) with cos in Q30. The shift is logical; the result fits
- * in int32 because |coeff| was scaled to 2^27 and |-2*cos| <= 2.
+/* coeff * (-2 * cos), cos in Q30.
+ * Forming -2 * cos in int32 overflows at cos = -1: an LSP of 4000 Hz
+ * has phase 2^31 and cos = -2^30, so -2 * cos is 2^31. coeff * (-cos)
+ * shifted by 29 is the same product, and -cos fits in int32.
  */
 static int32_t mul_cos(int32_t coeff, int32_t cos_q30)
 {
-    int32_t c1 = -cos_q30 * 2;
-
-    return c2fx_mulshr(coeff, c1, 30);
+    return c2fx_mulshr(coeff, -cos_q30, 29);
 }
 
 static uint32_t iabs32(int32_t x)
@@ -84,7 +76,7 @@ static uint32_t phase_from_q1(int q1)
     /* round(2^32 * (q1/2) / 8000) = (q1 * 2^26 + 125) / 250. */
     uint64_t num = c2fx_umul32((uint32_t)q1, 1u << 26) + 125u;
 
-    return c2fx_udiv64_inv(num, INV_U64_250);
+    return c2fx_udiv64_inv(num, C2FX_INV_U64_250);
 }
 
 static void scale_down(int32_t *poly, int n, int *q)

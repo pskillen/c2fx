@@ -6,6 +6,7 @@
 // of the forward result is 512 times the input, within the error below.
 
 #include "c2fx_dsp.h"
+#include "c2fx_fxp.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -144,6 +145,100 @@ static int test_log_exp(void)
     return 0;
 }
 
+static int fail_div(const char *what, uint64_t x, uint32_t got, uint32_t expect)
+{
+    fprintf(stderr, "%s x=%llu got %u expect %u\n", what, (unsigned long long)x, got, expect);
+    return 1;
+}
+
+/* Every x = d*k and x = d*k-1 up to xmax. floor(x/d) changes only there. */
+static int check_udiv32_bounds(uint32_t d, uint64_t inv, uint32_t xmax)
+{
+    uint32_t kmax = xmax / d;
+
+    for (uint32_t k = 0; k <= kmax; k++) {
+        uint32_t x = k * d;
+
+        if (c2fx_udiv32_inv(x, inv) != k) {
+            return fail_div("udiv32", x, c2fx_udiv32_inv(x, inv), k);
+        }
+        if (k > 0u && c2fx_udiv32_inv(x - 1u, inv) != k - 1u) {
+            return fail_div("udiv32", x - 1u, c2fx_udiv32_inv(x - 1u, inv), k - 1u);
+        }
+    }
+    if (c2fx_udiv32_inv(xmax, inv) != xmax / d) {
+        return fail_div("udiv32", xmax, c2fx_udiv32_inv(xmax, inv), xmax / d);
+    }
+    return 0;
+}
+
+/* Phase inputs: x = q1 * 2^26 + 125, q1 in 0..32767. */
+static int check_udiv64_phase(void)
+{
+    for (uint32_t q1 = 0; q1 <= 32767u; q1++) {
+        uint64_t x = ((uint64_t)q1 << 26) + 125u;
+        uint32_t expect = (uint32_t)(x / 250u);
+        uint32_t got = c2fx_udiv64_inv(x, C2FX_INV_U64_250);
+
+        if (got != expect) {
+            return fail_div("udiv64", x, got, expect);
+        }
+    }
+    return 0;
+}
+
+/* Every x = (d<<30)*k and the integer just below, through xmax. */
+static int check_p30_bounds(uint32_t d, uint64_t inv, uint64_t xmax)
+{
+    uint64_t denom = (uint64_t)d << 30;
+    uint64_t kmax = xmax / denom;
+
+    for (uint64_t k = 0; k <= kmax; k++) {
+        uint64_t x = k * denom;
+        uint32_t expect = (uint32_t)k;
+
+        if (c2fx_udiv_p30_inv(x, inv, d) != expect) {
+            return fail_div("p30", x, c2fx_udiv_p30_inv(x, inv, d), expect);
+        }
+        if (k > 0u && c2fx_udiv_p30_inv(x - 1u, inv, d) != expect - 1u) {
+            return fail_div("p30", x - 1u, c2fx_udiv_p30_inv(x - 1u, inv, d), expect - 1u);
+        }
+    }
+    {
+        uint32_t expect = (uint32_t)(xmax / denom);
+        uint32_t got = c2fx_udiv_p30_inv(xmax, inv, d);
+
+        if (got != expect) {
+            return fail_div("p30", xmax, got, expect);
+        }
+    }
+    return 0;
+}
+
+static int test_reciprocals(void)
+{
+    const uint32_t pi_q30 = 3373259426u;
+    const uint32_t th = (uint32_t)((((uint64_t)1u << 30) * pi_q30) >> 31);
+    const uint32_t th2_max = (uint32_t)(((uint64_t)th * th) >> 30);
+    const uint64_t p30_max = (uint64_t)th2_max << 30;
+
+    if (th2_max != 2649351757u) {
+        fprintf(stderr, "theta^2 max %u, expected 2649351757\n", th2_max);
+        return 1;
+    }
+    if (check_udiv32_bounds(156u, C2FX_INV_U64_156, 0xffffffffu) != 0 ||
+        check_udiv64_phase() != 0 ||
+        check_p30_bounds(6u, C2FX_INV_U64_P30_6, p30_max) != 0 ||
+        check_p30_bounds(20u, C2FX_INV_U64_P30_20, p30_max) != 0 ||
+        check_p30_bounds(42u, C2FX_INV_U64_P30_42, p30_max) != 0 ||
+        check_p30_bounds(72u, C2FX_INV_U64_P30_72, p30_max) != 0 ||
+        check_p30_bounds(110u, C2FX_INV_U64_P30_110, p30_max) != 0) {
+        return 1;
+    }
+    printf("reciprocals: exact through theta^2 %u and q1 0..32767\n", th2_max);
+    return 0;
+}
+
 int main(void)
 {
     int failed = 0;
@@ -151,5 +246,6 @@ int main(void)
     failed |= test_fft();
     failed |= test_cos();
     failed |= test_log_exp();
+    failed |= test_reciprocals();
     return failed ? 1 : 0;
 }

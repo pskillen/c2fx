@@ -63,10 +63,17 @@ void c2fx_lsp_to_lpc(
     int *q
 );
 
+/* log2(1e-4) in Q11. round(log2(1e-4) * 2048) = -27213. Added to each
+ * spectrum sum before the rescale.
+ */
+#define C2FX_SUM_EPS_LOG2_Q11 (-27213)
+
 /* L and log2 amplitudes. Calls the LSP to LPC step. */
 void c2fx_envelope(c2fx_subframe *sub);
 
-/* Host tests: log-domain sum with an epsilon term (same as in the envelope). */
-int32_t c2fx_log2_sum_for_test(const int32_t *v, int n, int32_t extra);
+/* log2 of (sum 2^v[k] + 2^extra), with v and extra in Q11. The envelope
+ * passes C2FX_SUM_EPS_LOG2_Q11 as extra for the spectrum sums.
+ */
+int32_t c2fx_log2_sum(const int32_t *v, int n, int32_t extra);
 
 #endif

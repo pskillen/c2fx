@@ -20,12 +20,6 @@
 /* log2(0.032) in Q11. round(log2(0.032) * 2048) = -10170. Real value 0.032. */
 #define C2FX_HARM1_LOG2_Q11 (-10170)
 
-/* log2(1e-4) in Q11. round(log2(1e-4) * 2048) = -27213. Real value 1e-4.
- * The committed vectors never bring a sum this low; test_fx_envelope still
- * probes this constant on crafted input.
- */
-#define C2FX_SUM_EPS_LOG2_Q11 (-27213)
-
 /* 1e-6 = 1125899907 * 2^-50. Relative error about 1.4e-10. */
 #define C2FX_POWER_FLOOR_MANT 1125899907u
 #define C2FX_POWER_FLOOR_EXP (-50)
@@ -193,7 +187,7 @@ static uint32_t exp2_neg_q20(int32_t delta)
 }
 
 /* log2 of (sum 2^(v[k]/2048) + 2^(extra/2048)), in Q11. */
-static int32_t log2_sum(const int32_t *v, int n, int32_t extra)
+int32_t c2fx_log2_sum(const int32_t *v, int n, int32_t extra)
 {
     int32_t maxv = extra;
     uint32_t acc = 0;
@@ -367,8 +361,8 @@ void c2fx_envelope(c2fx_subframe *sub)
     for (int bin = 0; bin < SPECTRUM_BINS; bin++) {
         log_den[bin] = -log_den[bin];
     }
-    log_scale = log2_sum(log_den, SPECTRUM_BINS, C2FX_SUM_EPS_LOG2_Q11) -
-                log2_sum(log_p, SPECTRUM_BINS, C2FX_SUM_EPS_LOG2_Q11);
+    log_scale = c2fx_log2_sum(log_den, SPECTRUM_BINS, C2FX_SUM_EPS_LOG2_Q11) -
+                c2fx_log2_sum(log_p, SPECTRUM_BINS, C2FX_SUM_EPS_LOG2_Q11);
     for (int bin = 0; bin < SPECTRUM_BINS; bin++) {
         log_p[bin] += log_scale;
         log_p[bin] += sub->energy_log2_q11;
@@ -392,15 +386,10 @@ void c2fx_envelope(c2fx_subframe *sub)
             sub->amp_log2_q11[m - 1] = -32768;
             continue;
         }
-        log_amp = half_q11(log2_sum(log_p + lo, hi - lo, -(64 << 11)));
+        log_amp = half_q11(c2fx_log2_sum(log_p + lo, hi - lo, -(64 << 11)));
         if (m == 1 && scale_h1) {
             log_amp += C2FX_HARM1_LOG2_Q11;
         }
         sub->amp_log2_q11[m - 1] = sat_q11(log_amp);
     }
-}
-
-int32_t c2fx_log2_sum_for_test(const int32_t *v, int n, int32_t extra)
-{
-    return log2_sum(v, n, extra);
 }

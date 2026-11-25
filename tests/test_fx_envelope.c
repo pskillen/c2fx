@@ -19,7 +19,6 @@
 #define MAX_SETS 32
 #define NAME_LEN 64
 #define AMP_DB 0.25
-#define C2FX_SUM_EPS_LOG2_Q11 (-27213)
 
 static int check_energy_table(void)
 {
@@ -58,8 +57,8 @@ static int check_energy_table(void)
 static int check_sum_eps(void)
 {
     const int32_t v[4] = { -28000, -28000, -28000, -28000 };
-    const int32_t got = c2fx_log2_sum_for_test(v, 4, C2FX_SUM_EPS_LOG2_Q11);
-    const int32_t wrong_eps = c2fx_log2_sum_for_test(v, 4, -(64 << 11));
+    const int32_t got = c2fx_log2_sum(v, 4, C2FX_SUM_EPS_LOG2_Q11);
+    const int32_t wrong_eps = c2fx_log2_sum(v, 4, -(64 << 11));
 
     if (got == wrong_eps) {
         fprintf(stderr, "sum eps probe did not distinguish constants\n");
@@ -67,6 +66,181 @@ static int check_sum_eps(void)
     }
     if (got != -23070) {
         fprintf(stderr, "sum eps golden %d got %d\n", -23070, (int)got);
+        return 1;
+    }
+    return 0;
+}
+
+#ifndef C2M_POSTFILTER_PDF
+/* Harmonic amplitudes against the float model. The reference LPC is the
+ * double LSP to LPC. worst is the largest error seen so far, in dB.
+ */
+static int harmonics_over_bar(const c2m_subframe *ms, c2fx_subframe *fs, double *worst)
+{
+    double a[C2M_LPC_ORDER + 1];
+    c2m_envelope env;
+    const double db_per_q11 = 20.0 * log10(2.0) / 2048.0;
+
+    c2m_lsp_to_lpc(ms->lsp_rad, a);
+    c2m_envelope_sample(a, ms->w0, ms->energy_db, &env);
+    c2fx_envelope(fs);
+    if (fs->count != env.count) {
+        fprintf(stderr, "harmonic count fx %d model %d\n", fs->count, env.count);
+        return 1;
+    }
+    for (int m = 0; m < env.count; m++) {
+        double err;
+
+        if (env.amp[m] <= 0.0) {
+            err = (fs->amp_log2_q11[m] == (int16_t)-32768) ? 0.0 : 100.0;
+        } else {
+            double model_q11 = log2(env.amp[m]) * 2048.0;
+
+            err = fabs((double)fs->amp_log2_q11[m] - model_q11) * db_per_q11;
+        }
+        if (err > *worst) {
+            *worst = err;
+        }
+    }
+    return 0;
+}
+#endif
+
+/* Voiced frame whose running LSP sum is exactly 4000 Hz (q1 8000). */
+static void set_frame_4000(c2fx_indices *fidx, c2m_indices *midx)
+{
+    static const int d[C2FX_LSP_ORDER] = {31, 31, 31, 31, 7, 10, 10, 10, 10, 10};
+
+    memset(fidx, 0, sizeof *fidx);
+    memset(midx, 0, sizeof *midx);
+    fidx->v_a = 1;
+    fidx->v_b = 1;
+    fidx->i = 60;
+    fidx->e = 20;
+    midx->v_a = 1;
+    midx->v_b = 1;
+    midx->i = 60;
+    midx->e = 20;
+    for (int j = 0; j < C2FX_LSP_ORDER; j++) {
+        fidx->d[j] = d[j];
+        midx->d[j] = d[j];
+    }
+}
+
+static int check_lsp_4000(void)
+{
+    c2fx_indices fidx;
+    c2m_indices midx;
+    c2fx_front fx;
+    c2m_decode md;
+    c2fx_subframe fs[2];
+    c2m_subframe ms[2];
+    int seen = 0;
+
+    set_frame_4000(&fidx, &midx);
+    c2fx_front_init(&fx);
+    c2m_decode_init(&md);
+    c2fx_dequant_frame(&fx, &fidx, fs);
+    c2m_decode_frame(&md, &midx, ms);
+    for (int j = 0; j < C2FX_LSP_ORDER; j++) {
+        if (fs[1].lsp_q1[j] == 8000) {
+            seen = 1;
+        }
+    }
+    if (!seen) {
+        fprintf(stderr, "4000 Hz frame did not decode an LSP at 8000 q1\n");
+        return 1;
+    }
+#ifndef C2M_POSTFILTER_PDF
+    {
+        double worst = 0.0;
+
+        if (harmonics_over_bar(&ms[0], &fs[0], &worst) != 0 ||
+            harmonics_over_bar(&ms[1], &fs[1], &worst) != 0 || worst > AMP_DB) {
+            fprintf(stderr, "4000 Hz frame worst %.3f dB\n", worst);
+            return 1;
+        }
+        printf("lsp 4000 Hz frame worst %7.3f dB\n", worst);
+    }
+#else
+    c2fx_envelope(&fs[0]);
+    c2fx_envelope(&fs[1]);
+    printf("lsp 4000 Hz frame decoded\n");
+#endif
+    return 0;
+}
+
+static double poly_mag2(const double *a, double angle)
+{
+    double re = 0.0;
+    double im = 0.0;
+
+    for (int k = 0; k <= C2FX_LSP_ORDER; k++) {
+        double phase = angle * (double)k;
+
+        re += a[k] * cos(phase);
+        im -= a[k] * sin(phase);
+    }
+    return re * re + im * im;
+}
+
+/* |A| of c2fx_lsp_to_lpc against the double LSP to LPC, in dB.
+ * C2M_POWER_FLOOR keeps a shared null from dominating the ratio.
+ */
+static double lpc_db(const int16_t q1[C2FX_LSP_ORDER])
+{
+    int32_t wide[C2FX_LSP_ORDER + 1];
+    int q;
+    double hz[C2FX_LSP_ORDER];
+    double rad[C2FX_LSP_ORDER];
+    double a[C2M_LPC_ORDER + 1];
+    double afx[C2FX_LSP_ORDER + 1];
+    double worst = 0.0;
+
+    for (int j = 0; j < C2FX_LSP_ORDER; j++) {
+        hz[j] = (double)q1[j] / 2.0;
+    }
+    c2m_lsp_hz_to_rad(hz, rad);
+    c2m_lsp_to_lpc(rad, a);
+    c2fx_lsp_to_lpc(q1, wide, &q);
+    for (int k = 0; k <= C2FX_LSP_ORDER; k++) {
+        afx[k] = ldexp((double)wide[k], -q);
+    }
+    for (int bin = 0; bin < C2M_SPECTRUM_BINS; bin++) {
+        double angle = 2.0 * C2M_PI * (double)bin / (double)C2M_DFT_SIZE;
+        double md = poly_mag2(a, angle);
+        double mf = poly_mag2(afx, angle);
+        double db = fabs(10.0 * log10((mf + C2M_POWER_FLOOR) / (md + C2M_POWER_FLOOR)));
+
+        if (db > worst) {
+            worst = db;
+        }
+    }
+    return worst;
+}
+
+/* Every table frequency 0, 25, ..., 4000 Hz as the single LSP value
+ * (all ten LSPs), against the double LSP to LPC. The bar is AMP_DB.
+ */
+static int check_lsp_grid(void)
+{
+    double worst = 0.0;
+
+    for (int hz = 0; hz <= 4000; hz += 25) {
+        int16_t q1[C2FX_LSP_ORDER];
+        double db;
+
+        for (int j = 0; j < C2FX_LSP_ORDER; j++) {
+            q1[j] = (int16_t)(hz * 2);
+        }
+        db = lpc_db(q1);
+        if (db > worst) {
+            worst = db;
+        }
+    }
+    printf("lsp grid 0..4000 Hz worst %7.3f dB\n", worst);
+    if (worst > AMP_DB) {
+        fprintf(stderr, "lsp grid worst %.3f dB\n", worst);
         return 1;
     }
     return 0;
@@ -244,6 +418,8 @@ int main(void)
     }
     failed |= check_energy_table();
     failed |= check_sum_eps();
+    failed |= check_lsp_4000();
+    failed |= check_lsp_grid();
     while ((ent = readdir(dp)) != NULL) {
         if (!ends_with(ent->d_name, ".c2")) {
             continue;
