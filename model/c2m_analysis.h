@@ -12,7 +12,7 @@
 
 /* Spec 10.2.2: odd Hann of 279 samples, advanced by 80. */
 #define C2M_ANALYSIS_LEN 279
-#define C2M_ANALYSIS_CENTRE 139
+#define C2M_ANALYSIS_CENTER 139
 #define C2M_ANALYSIS_HOP 80
 
 /* [c2fx design] No input high-pass (spec 10.2.1). An impulse's LPC energy
@@ -51,14 +51,14 @@
 /* The 279-point analysis window: Hann scaled so the sum of squares is 1/512. */
 void c2m_analysis_weights(double w[C2M_ANALYSIS_LEN]);
 
-/* Order-10 autocorrelation LPC of the analysis window centred on `centre`.
+/* Order-10 autocorrelation LPC of the analysis window centered on `center`.
  * Samples outside [0, n) are zero. energy is G^2 (spec 10.2.6). lsp_rad is
  * ten ordered frequencies in radians.
  */
-void c2m_lpc_analyse(
+void c2m_lpc_analyze(
     const int16_t *pcm,
     int n,
-    int centre,
+    int center,
     double *energy,
     double lsp_rad[C2M_LSP_ORDER]
 );

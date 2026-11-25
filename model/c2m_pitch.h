@@ -77,7 +77,7 @@
 #define C2M_PITCH_HS_STEP 0.005
 #define C2M_PITCH_HS_BAND_HZ 1500.0
 
-/* Fundamental in Hz of the 320-sample block centred on `centre`. */
-double c2m_pitch_hz(const int16_t *pcm, int n, int centre, double prev_hz);
+/* Fundamental in Hz of the 320-sample block centered on `center`. */
+double c2m_pitch_hz(const int16_t *pcm, int n, int center, double prev_hz);
 
 #endif

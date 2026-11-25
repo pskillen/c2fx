@@ -35,12 +35,12 @@
 #define C2M_VOICING_TILT_BRIDGE 0.5
 
 /* Summed band SNR in dB: -100 when there is no signal, capped at 100. */
-double c2m_voicing_snr_db(const int16_t *pcm, int n, int centre, double f0_hz);
+double c2m_voicing_snr_db(const int16_t *pcm, int n, int center, double f0_hz);
 
 /* First normalized autocorrelation coefficient of the mean-removed, windowed
- * analysis frame centred on `centre`: -1 to 1, 0 for a silent or constant frame.
+ * analysis frame centered on `center`: -1 to 1, 0 for a silent or constant frame.
  */
-double c2m_voicing_tilt(const int16_t *pcm, int n, int centre);
+double c2m_voicing_tilt(const int16_t *pcm, int n, int center);
 
 /* Rows 1 and 2 above: the base decision for one row. */
 int c2m_voicing_base(double snr_db, double tilt);
@@ -50,9 +50,9 @@ int c2m_voicing_base(double snr_db, double tilt);
  */
 int c2m_voicing_final(int prev_base, int base, int next_base, double tilt);
 
-/* The 6 dB test alone, on the base rules: 1 when the window centred on
- * `centre` is voiced at f0_hz, without neighbors.
+/* The 6 dB test alone, on the base rules: 1 when the window centered on
+ * `center` is voiced at f0_hz, without neighbors.
  */
-int c2m_voicing_decision(const int16_t *pcm, int n, int centre, double f0_hz);
+int c2m_voicing_decision(const int16_t *pcm, int n, int center, double f0_hz);
 
 #endif

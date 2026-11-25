@@ -11,7 +11,7 @@
 #include <stddef.h>
 
 
-/* One analysed 10 ms row, with what the voicing rules and the pitch tracker
+/* One analyzed 10 ms row, with what the voicing rules and the pitch tracker
  * need from its neighbors.
  */
 typedef struct c2m_arow {
@@ -21,13 +21,13 @@ typedef struct c2m_arow {
     int base;
 } c2m_arow;
 
-static void analyse_row(const int16_t *pcm, int n, int centre, const c2m_arow *prev, c2m_arow *out)
+static void analyze_row(const int16_t *pcm, int n, int center, const c2m_arow *prev, c2m_arow *out)
 {
-    c2m_lpc_analyse(pcm, n, centre, &out->row.energy, out->row.lsp_rad);
-    out->row.f0_hz = c2m_pitch_hz(pcm, n, centre, prev != NULL && prev->base ? prev->row.f0_hz : 0.0);
+    c2m_lpc_analyze(pcm, n, center, &out->row.energy, out->row.lsp_rad);
+    out->row.f0_hz = c2m_pitch_hz(pcm, n, center, prev != NULL && prev->base ? prev->row.f0_hz : 0.0);
     out->row.w0 = 2.0 * C2M_PI * out->row.f0_hz / C2M_FS_HZ;
-    out->snr_db = c2m_voicing_snr_db(pcm, n, centre, out->row.f0_hz);
-    out->tilt = c2m_voicing_tilt(pcm, n, centre);
+    out->snr_db = c2m_voicing_snr_db(pcm, n, center, out->row.f0_hz);
+    out->tilt = c2m_voicing_tilt(pcm, n, center);
     out->base = c2m_voicing_base(out->snr_db, out->tilt);
 }
 
@@ -40,10 +40,10 @@ int c2m_encode(const int16_t *pcm, int n, uint8_t *out)
         return -1;
     }
     frames = n / (2 * C2M_ANALYSIS_HOP);
-    /* w[0..3] are the rows centred at 2k-2, 2k-1, 2k and 2k+1 hops. */
-    analyse_row(pcm, n, -2 * C2M_ANALYSIS_HOP, NULL, &w[0]);
+    /* w[0..3] are the rows centered at 2k-2, 2k-1, 2k and 2k+1 hops. */
+    analyze_row(pcm, n, -2 * C2M_ANALYSIS_HOP, NULL, &w[0]);
     for (int j = 1; j < 4; j++) {
-        analyse_row(pcm, n, (j - 2) * C2M_ANALYSIS_HOP, &w[j - 1], &w[j]);
+        analyze_row(pcm, n, (j - 2) * C2M_ANALYSIS_HOP, &w[j - 1], &w[j]);
     }
     for (int k = 0; k < frames; k++) {
         c2m_indices idx;
@@ -56,8 +56,8 @@ int c2m_encode(const int16_t *pcm, int n, uint8_t *out)
         }
         w[0] = w[2];
         w[1] = w[3];
-        analyse_row(pcm, n, (2 * k + 2) * C2M_ANALYSIS_HOP, &w[1], &w[2]);
-        analyse_row(pcm, n, (2 * k + 3) * C2M_ANALYSIS_HOP, &w[2], &w[3]);
+        analyze_row(pcm, n, (2 * k + 2) * C2M_ANALYSIS_HOP, &w[1], &w[2]);
+        analyze_row(pcm, n, (2 * k + 3) * C2M_ANALYSIS_HOP, &w[2], &w[3]);
     }
     return frames;
 }
