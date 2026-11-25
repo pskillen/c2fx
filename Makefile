@@ -139,6 +139,7 @@ test: $(BUILD)/test_version $(addprefix $(BUILD)/test-version/,$(VERSION_CASES))
 		actual=$$($(BUILD)/test-version/$$version); \
 		test "$$actual" = "c2fx version: $$version"; \
 	done
+	$(BUILD)/test_fx_analysis
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
 	$(BUILD)/test_model_vectors
@@ -219,6 +220,10 @@ $(BUILD)/test_dsp: tests/test_dsp.c $(BUILD)/libc2fx.a src/dsp/c2fx_dsp.h src/ds
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) -Isrc/dsp $< $(BUILD)/libc2fx.a -lm -o $@
 
 $(BUILD)/test_fx_frame: tests/test_fx_frame.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_fx_analysis: tests/test_fx_analysis.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(wildcard model/*.h) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
