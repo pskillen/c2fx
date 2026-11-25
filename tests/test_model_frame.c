@@ -326,7 +326,7 @@ static int test_lpc_envelope(void)
     }
 /* Goldens are for the default beta pair; make test EXTRA_CFLAGS=-DC2M_POSTFILTER_PDF skips this. */
 #ifndef C2M_POSTFILTER_PDF
-    if (near("harmonic 1 amplitude", env.amp[0], 520.01713855477533, 1e-4) != 0) {
+    if (near("harmonic 1 amplitude", env.amp[0], 520.00718908098713, 1e-4) != 0) {
         return 1;
     }
 #endif
@@ -337,17 +337,17 @@ static int test_lpc_envelope(void)
         for (int m = 0; m < env.count; m++) {
             sum_sq += env.amp[m] * env.amp[m];
         }
-        if (near("level sum", sum_sq, 944672.47528305487, 1e-2) != 0) {
+        if (near("level sum", sum_sq, 944648.05338815483, 1e-2) != 0) {
             return 1;
         }
     }
 
     c2m_envelope_sample(a, c2m_w0_rad(36), params.energy_db, &env);
-    if (near("harmonic 1 index 36", env.amp[0], 13.974406431593373, 1e-4) != 0) {
+    if (near("harmonic 1 index 36", env.amp[0], 13.97413365305446, 1e-4) != 0) {
         return 1;
     }
     c2m_envelope_sample(a, c2m_w0_rad(37), params.energy_db, &env);
-    if (near("harmonic 1 index 37", env.amp[0], 459.68444981168255, 1e-3) != 0) {
+    if (near("harmonic 1 index 37", env.amp[0], 459.67550391358827, 1e-3) != 0) {
         return 1;
     }
 #endif
@@ -373,7 +373,7 @@ static int test_lpc_envelope(void)
         return 1;
     }
 #ifndef C2M_POSTFILTER_PDF
-    if (near("50 Hz harmonic 1", env.amp[0], 8.1396655893986676, 1e-3) != 0) {
+    if (near("50 Hz harmonic 1", env.amp[0], 8.1395035180971131, 1e-3) != 0) {
         return 1;
     }
 
@@ -384,7 +384,7 @@ static int test_lpc_envelope(void)
         for (int m = 0; m < env.count; m++) {
             sum_sq += env.amp[m] * env.amp[m];
         }
-        if (env.count != 12 || near("high pitch band sum", sum_sq, 859279.58720901445, 0.5) != 0) {
+        if (env.count != 12 || near("high pitch band sum", sum_sq, 859258.52654035459, 0.5) != 0) {
             fprintf(stderr, "index 100 envelope L %d sum %.12f\n", env.count, sum_sq);
             return 1;
         }

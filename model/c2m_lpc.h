@@ -31,7 +31,7 @@ int c2m_harmonic_count(double w0);
 /* a[0] = 1, a[1..10] are the coefficients of z^-1 .. z^-10. */
 void c2m_lsp_to_lpc(const double lsp_rad[C2M_LSP_ORDER], double a[C2M_LPC_ORDER + 1]);
 
-/* P(k) = 1/|A|^2 on bins 0..255. */
+/* P(k) = 1/(|A|^2 + C2M_POWER_FLOOR) on bins 0..255. */
 void c2m_lpc_power(const double a[C2M_LPC_ORDER + 1], double power[C2M_SPECTRUM_BINS]);
 
 /* P'(k) = P(k) * |A(z/gamma) / A(z)|^(2*beta). */

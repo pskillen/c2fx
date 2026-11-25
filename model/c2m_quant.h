@@ -29,6 +29,8 @@
 #define C2M_BASS_BOOST 1.96
 #define C2M_BASS_BINS 64
 #define C2M_SPECTRUM_EPS 1e-4
+/* Spec 6.2: added to |A(z)|^2 wherever it is inverted. */
+#define C2M_POWER_FLOOR 1e-6
 
 /* Spec 3.4: keep the LSP running sum unchanged. */
 #define C2M_LSP_KEEP_RAW_SUM 1
