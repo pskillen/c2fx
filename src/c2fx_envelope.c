@@ -330,7 +330,6 @@ void c2fx_envelope(c2fx_subframe *sub)
 {
     int32_t wide[C2FX_LSP_ORDER + 1];
     int32_t gamma[C2FX_LSP_ORDER + 1];
-    int16_t a_q12[C2FX_LSP_ORDER + 1];
     int32_t log_den[SPECTRUM_BINS];
     int32_t log_num[SPECTRUM_BINS];
     int32_t log_p[SPECTRUM_BINS];
@@ -342,8 +341,7 @@ void c2fx_envelope(c2fx_subframe *sub)
     for (int m = 0; m < C2FX_MAX_HARMONICS; m++) {
         sub->amp_log2_q11[m] = 0;
     }
-    c2fx_lsp_to_lpc(sub->lsp_q1, a_q12, wide, &q);
-    (void)a_q12;
+    c2fx_lsp_to_lpc(sub->lsp_q1, wide, &q);
     gamma[0] = wide[0];
     for (int k = 1; k <= C2FX_LSP_ORDER; k++) {
         gamma[k] = c2fx_mulshr(wide[k], gamma_q15[k], 15);

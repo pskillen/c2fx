@@ -52,13 +52,12 @@ void c2fx_front_init(c2fx_front *st);
 /* Voicing, w0, energy and LSPs for sub-frame a (out[0]) and b (out[1]). */
 void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe out[2]);
 
-/* LPC from LSPs. a_q12 is Q12, saturated, for later filtering.
- * wide[k] / 2^q is the same coefficient before that rounding. The envelope
- * uses wide: several vector frames have |a| above 8, which Q12 cannot hold.
+/* LPC from LSPs. wide[k] / 2^q is coefficient k. q starts at 27 and drops
+ * when the recursion would leave int32. |a| on real frames exceeds 8, which
+ * a saturated Q12 copy cannot hold.
  */
 void c2fx_lsp_to_lpc(
     const int16_t lsp_q1[C2FX_LSP_ORDER],
-    int16_t a_q12[C2FX_LSP_ORDER + 1],
     int32_t wide[C2FX_LSP_ORDER + 1],
     int *q
 );

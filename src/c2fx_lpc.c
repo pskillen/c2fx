@@ -2,8 +2,7 @@
 // Copyright (c) 2026 The c2fx Authors
 // Spec 5: LSP to LPC. The recursion stays at Q27 until a coefficient would
 // leave int32, then the whole polynomial shifts right and the Q drops.
-// The Q12 copy is what a later filter uses; |a| on real frames can exceed 8,
-// so the envelope keeps the wide coefficients.
+// Callers keep that Q. A Q12 copy saturates: |a| on real frames exceeds 8.
 
 #include "c2fx_internal.h"
 
@@ -99,8 +98,8 @@ static void scale_down(int32_t *poly, int n, int *q)
     }
 }
 
-/* poly *= (1 - 2*cos*z^-1 + z^-2). cos_q30 is Q30. */
-static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t cos_q30)
+/* poly *= (1 - 2*cos*z^-1 + z^-2). cosine is Q30. */
+static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t cosine)
 {
     int n = *order;
     int32_t next[C2FX_LSP_ORDER + 3];
@@ -111,7 +110,7 @@ static void mul_quadratic(int32_t *poly, int *order, int *q, int32_t cos_q30)
     }
     for (int i = 0; i <= n; i++) {
         next[i] += poly[i];
-        next[i + 1] += mul_cos(poly[i], cos_q30);
+        next[i + 1] += mul_cos(poly[i], cosine);
         next[i + 2] += poly[i];
     }
     *order = n + 2;
@@ -130,34 +129,8 @@ static void align_q(int32_t *poly, int n, int *q, int target)
     }
 }
 
-static int16_t to_q12(int32_t value, int q)
-{
-    int32_t v = value;
-
-    if (q > 12) {
-        int sh = q - 12;
-        int32_t bias = 1 << (sh - 1);
-
-        if (v >= 0) {
-            v = (v + bias) >> sh;
-        } else {
-            v = -((-v + bias) >> sh);
-        }
-    } else if (q < 12) {
-        v <<= (12 - q);
-    }
-    if (v > 32767) {
-        return 32767;
-    }
-    if (v < -32768) {
-        return -32768;
-    }
-    return (int16_t)v;
-}
-
 void c2fx_lsp_to_lpc(
     const int16_t lsp_q1[C2FX_LSP_ORDER],
-    int16_t a_q12[C2FX_LSP_ORDER + 1],
     int32_t wide[C2FX_LSP_ORDER + 1],
     int *q_out
 )
@@ -197,7 +170,6 @@ void c2fx_lsp_to_lpc(
         int32_t ak = sum >> 1;
 
         wide[k] = ak;
-        a_q12[k] = to_q12(ak, p_q);
     }
     *q_out = p_q;
 }
