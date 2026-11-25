@@ -162,7 +162,8 @@ static int32_t to_q8(int32_t y_qs, int s)
         if (y_qs < -(C2FX_Q8_LIM >> sh)) {
             return -C2FX_Q8_LIM;
         }
-        return y_qs << sh;
+        /* The clamps bound the scaled sample to ±C2FX_Q8_LIM. */
+        return y_qs * ((int32_t)1 << sh);
     }
     return q8_clamp(shr_round(y_qs, -sh));
 }
