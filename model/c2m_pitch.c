@@ -9,6 +9,21 @@
 
 #include <math.h>
 
+/* [c2fx design] Added under the square root of period_corr so a silent window
+ * (zero energy on either side) gives a correlation of 0 and not 0/0. Window
+ * energies of real frames are int16 squares summed over 200 samples, many
+ * orders above 1e-9, so the guard does not move them.
+ */
+#define C2M_PITCH_CORR_GUARD 1e-9
+
+/* [c2fx design] The "any peak" search of the header stops below two thirds of
+ * the top peak's bin (kbest * 2 / 3, integer arithmetic). Two thirds is a
+ * design choice, not a measured value: a lower peak closer than that to the
+ * top one is not taken as a separate, lower pitch.
+ */
+#define C2M_PITCH_ANY_CEIL_NUM 2
+#define C2M_PITCH_ANY_CEIL_DEN 3
+
 static double sample_at(const int16_t *pcm, int n, int index)
 {
     if (index < 0 || index >= n) {
@@ -17,6 +32,9 @@ static double sample_at(const int16_t *pcm, int n, int index)
     return (double)pcm[index];
 }
 
+/* The pre-processor low-pass: a windowed-sinc FIR, Hamming window of
+ * C2M_PITCH_LPF_TAPS (48) samples, normalized to unit DC gain.
+ */
 static void lowpass(double fir[C2M_PITCH_LPF_TAPS])
 {
     double fc = C2M_PITCH_LPF_HZ / C2M_FS_HZ;
@@ -32,6 +50,7 @@ static void lowpass(double fir[C2M_PITCH_LPF_TAPS])
         } else {
             h = sin(2.0 * C2M_PI * fc * x) / (C2M_PI * x);
         }
+        /* Hamming window of C2M_PITCH_LPF_TAPS samples. */
         h *= 0.54 - 0.46 * cos(2.0 * C2M_PI * (double)i / (double)(C2M_PITCH_LPF_TAPS - 1));
         fir[i] = h;
         sum += h;
@@ -46,17 +65,17 @@ static int local_peak(const double *mag, int k)
     return k > 0 && k < C2M_PITCH_DFT / 2 - 1 && mag[k] >= mag[k - 1] && mag[k] >= mag[k + 1];
 }
 
-/* Normalized correlation of the 2*C2M_PITCH_CORR_HALF samples around `centre`
+/* Normalized correlation of the 2*C2M_PITCH_CORR_HALF samples around `center`
  * with the same samples one period of f_hz earlier.
  */
-static double period_corr(const int16_t *pcm, int n, int centre, double f_hz)
+static double period_corr(const int16_t *pcm, int n, int center, double f_hz)
 {
     int lag = (int)floor(C2M_FS_HZ / f_hz + 0.5);
     double ab = 0.0;
     double aa = 0.0;
     double bb = 0.0;
 
-    for (int i = centre - C2M_PITCH_CORR_HALF; i < centre + C2M_PITCH_CORR_HALF; i++) {
+    for (int i = center - C2M_PITCH_CORR_HALF; i < center + C2M_PITCH_CORR_HALF; i++) {
         double u = sample_at(pcm, n, i);
         double v = sample_at(pcm, n, i - lag);
 
@@ -64,7 +83,7 @@ static double period_corr(const int16_t *pcm, int n, int centre, double f_hz)
         aa += u * u;
         bb += v * v;
     }
-    return ab / sqrt(aa * bb + 1e-9);
+    return ab / sqrt(aa * bb + C2M_PITCH_CORR_GUARD);
 }
 
 /* Power of the windowed frame at f_hz, linearly interpolated between bins. */
@@ -81,7 +100,7 @@ static double power_at(const double *pw, double f_hz)
 }
 
 /* Refine f_hz by the harmonic sum of the analysis spectrum's power. */
-static double refine_f0(const int16_t *pcm, int n, int centre, double f_hz)
+static double refine_f0(const int16_t *pcm, int n, int center, double f_hz)
 {
     double w[C2M_ANALYSIS_LEN];
     double re[C2M_PITCH_HS_DFT];
@@ -96,7 +115,7 @@ static double refine_f0(const int16_t *pcm, int n, int centre, double f_hz)
         im[i] = 0.0;
     }
     for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
-        re[i] = sample_at(pcm, n, centre - C2M_ANALYSIS_CENTRE + i) * w[i];
+        re[i] = sample_at(pcm, n, center - C2M_ANALYSIS_CENTER + i) * w[i];
     }
     c2m_fft(re, im, C2M_PITCH_HS_DFT);
     for (int k = 0; k <= C2M_PITCH_HS_DFT / 2; k++) {
@@ -118,7 +137,7 @@ static double refine_f0(const int16_t *pcm, int n, int centre, double f_hz)
     return best;
 }
 
-double c2m_pitch_hz(const int16_t *pcm, int n, int centre, double prev_hz)
+double c2m_pitch_hz(const int16_t *pcm, int n, int center, double prev_hz)
 {
     double fir[C2M_PITCH_LPF_TAPS];
     double sq[C2M_PITCH_SAMPLES];
@@ -138,7 +157,7 @@ double c2m_pitch_hz(const int16_t *pcm, int n, int centre, double prev_hz)
     double f0;
 
     for (int i = 0; i < C2M_PITCH_SAMPLES; i++) {
-        double s = sample_at(pcm, n, centre - C2M_PITCH_SAMPLES / 2 + i);
+        double s = sample_at(pcm, n, center - C2M_PITCH_SAMPLES / 2 + i);
 
         sq[i] = s * s;
     }
@@ -166,6 +185,7 @@ double c2m_pitch_hz(const int16_t *pcm, int n, int centre, double prev_hz)
     }
     for (int i = 0; i < C2M_PITCH_SAMPLES; i += C2M_PITCH_DECIMATE) {
         int nwin = C2M_PITCH_SAMPLES / C2M_PITCH_DECIMATE;
+        /* Hann window of nwin = 320 / 5 = 64 decimated samples. */
         double w = 0.5 - 0.5 * cos(2.0 * C2M_PI * (double)ndec / (double)(nwin - 1));
 
         re[ndec] = low[i] * w;
@@ -233,14 +253,14 @@ double c2m_pitch_hz(const int16_t *pcm, int n, int centre, double prev_hz)
                 }
             }
             if (mag[ck] >= ratio * mag[kbest] &&
-                period_corr(pcm, n, centre, f_ck) >=
-                    period_corr(pcm, n, centre, (double)kbest * fs_dec / (double)C2M_PITCH_DFT) +
+                period_corr(pcm, n, center, f_ck) >=
+                    period_corr(pcm, n, center, (double)kbest * fs_dec / (double)C2M_PITCH_DFT) +
                         C2M_PITCH_CORR_MARGIN) {
                 chosen = ck;
             }
         }
     }
-    for (int k = bin_min; k < kbest * 2 / 3 && k < chosen; k++) {
+    for (int k = bin_min; k < kbest * C2M_PITCH_ANY_CEIL_NUM / C2M_PITCH_ANY_CEIL_DEN && k < chosen; k++) {
         double f_k = (double)k * fs_dec / (double)C2M_PITCH_DFT;
 
         if (local_peak(mag, k) && f_k >= C2M_PITCH_ANY_MIN_HZ && mag[k] >= C2M_PITCH_ANY_RATIO * mag[kbest]) {
@@ -269,7 +289,7 @@ double c2m_pitch_hz(const int16_t *pcm, int n, int centre, double prev_hz)
         f0 = ((double)chosen + delta) * fs_dec / (double)C2M_PITCH_DFT;
     }
     if (C2M_PITCH_HS_STEPS > 0) {
-        f0 = refine_f0(pcm, n, centre, f0);
+        f0 = refine_f0(pcm, n, center, f0);
     }
     if (f0 < C2M_PITCH_FMIN_HZ) {
         f0 = C2M_PITCH_FMIN_HZ;

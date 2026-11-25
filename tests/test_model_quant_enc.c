@@ -13,6 +13,13 @@
 
 /* Spec 10.1. The CSV holds unquantized LSPs, quantized w0 and energy, and the
  * voicing flags. Re-quantizing those numbers is the index in vectors/<set>.c2.
+ *
+ * What is checked against analysis values: the LSP indices (from the CSV's
+ * unquantized LSPs) and the voicing flags. The w0 and energy columns are
+ * already post-quantization, so they are checked only by the inverse round
+ * trip over the vectors, plus the table-driven boundary points in
+ * test_boundary_points (raw indices just below and above a rounding midpoint,
+ * and both clip ends), built from the spec 10.1.1 formulas.
  */
 
 #define MAX_SETS 64
@@ -172,6 +179,11 @@ static int check_set(const char *c2_name)
                 expect.i,
                 expect.e
             );
+            for (int j = 0; j < C2M_LSP_ORDER; j++) {
+                if (got.d[j] != expect.d[j]) {
+                    fprintf(stderr, "  lsp index %d: got %d, bitstream %d\n", j, got.d[j], expect.d[j]);
+                }
+            }
             failed = 1;
             break;
         }
@@ -206,6 +218,79 @@ static int test_worked_points(void)
     return 0;
 }
 
+/* Spec 10.1: i = clip(round((f0 - 50) * 128 / 350), 0, 127) and
+ * e = clip(round((10 * log10(E) + 10) * 32 / 50), 0, 31). Each point gives a raw
+ * (unrounded) index; the input is that raw index converted back by the formula.
+ */
+static double w0_from_raw(double raw)
+{
+    return 2.0 * C2M_PI * (50.0 + raw * 350.0 / 128.0) / C2M_FS_HZ;
+}
+
+static double energy_from_raw(double raw)
+{
+    return pow(10.0, (raw * 50.0 / 32.0 - 10.0) / 10.0);
+}
+
+static int test_boundary_points(void)
+{
+    static const struct {
+        double raw;
+        int expect;
+    } pts[] = {
+        { -5.0, 0 },   { -0.55, 0 },  { -0.45, 0 },  { 0.0, 0 },    { 0.45, 0 },   { 0.55, 1 },
+        { 32.45, 32 }, { 32.55, 33 }, { 63.45, 63 }, { 63.55, 64 }, { 126.45, 126 }, { 126.55, 127 },
+        { 127.0, 127 }, { 127.45, 127 }, { 127.55, 127 }, { 128.0, 127 }, { 140.0, 127 },
+    };
+    static const struct {
+        double raw;
+        int expect;
+    } epts[] = {
+        { -8.0, 0 },   { -0.55, 0 },  { -0.45, 0 },  { 0.0, 0 },    { 0.45, 0 },  { 0.55, 1 },
+        { 15.45, 15 }, { 15.55, 16 }, { 30.45, 30 }, { 30.55, 31 }, { 31.0, 31 }, { 31.45, 31 },
+        { 31.55, 31 }, { 40.0, 31 },
+    };
+    int failed = 0;
+
+    for (size_t k = 0; k < sizeof pts / sizeof pts[0]; k++) {
+        int got = c2m_quant_w0_index(w0_from_raw(pts[k].raw));
+
+        if (got != pts[k].expect) {
+            fprintf(stderr, "w0 raw index %.2f quantizes to %d, expected %d\n", pts[k].raw, got, pts[k].expect);
+            failed = 1;
+        }
+    }
+    /* The ends named by the spec: 400 Hz is index 127, and below 50 Hz is index 0. */
+    if (c2m_quant_w0_index(2.0 * C2M_PI * 400.0 / C2M_FS_HZ) != 127) {
+        fprintf(stderr, "w0 of 400 Hz did not quantize to 127\n");
+        failed = 1;
+    }
+    if (c2m_quant_w0_index(2.0 * C2M_PI * 20.0 / C2M_FS_HZ) != 0) {
+        fprintf(stderr, "w0 of 20 Hz did not quantize to 0\n");
+        failed = 1;
+    }
+    for (size_t k = 0; k < sizeof epts / sizeof epts[0]; k++) {
+        int got = c2m_quant_energy_index(energy_from_raw(epts[k].raw));
+
+        if (got != epts[k].expect) {
+            fprintf(
+                stderr, "energy raw index %.2f quantizes to %d, expected %d\n", epts[k].raw, got, epts[k].expect
+            );
+            failed = 1;
+        }
+    }
+    /* 0.06 is -12.2 dB, below the bottom of the range; 1e5 is 50 dB, above the top. */
+    if (c2m_quant_energy_index(0.06) != 0) {
+        fprintf(stderr, "energy 0.06 did not quantize to 0\n");
+        failed = 1;
+    }
+    if (c2m_quant_energy_index(1.0e5) != 31) {
+        fprintf(stderr, "energy 1e5 did not quantize to 31\n");
+        failed = 1;
+    }
+    return failed;
+}
+
 int main(void)
 {
     DIR *dp;
@@ -214,7 +299,9 @@ int main(void)
     int count = 0;
     int failed = 0;
 
-    if (test_worked_points() != 0) {
+    failed |= test_worked_points();
+    failed |= test_boundary_points();
+    if (failed) {
         return 1;
     }
     dp = opendir("vectors");

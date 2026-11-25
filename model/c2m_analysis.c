@@ -42,13 +42,13 @@ void c2m_analysis_weights(double w[C2M_ANALYSIS_LEN])
     }
 }
 
-static void windowed_frame(const int16_t *pcm, int n, int centre, double x[C2M_ANALYSIS_LEN])
+static void windowed_frame(const int16_t *pcm, int n, int center, double x[C2M_ANALYSIS_LEN])
 {
     double w[C2M_ANALYSIS_LEN];
 
     c2m_analysis_weights(w);
     for (int i = 0; i < C2M_ANALYSIS_LEN; i++) {
-        int sample = centre - C2M_ANALYSIS_CENTRE + i;
+        int sample = center - C2M_ANALYSIS_CENTER + i;
 
         x[i] = sample_at(pcm, n, sample) * w[i];
     }
@@ -243,10 +243,10 @@ static void lpc_to_lsp(const double a[C2M_LPC_ORDER + 1], double lsp_rad[C2M_LSP
     }
 }
 
-void c2m_lpc_analyse(
+void c2m_lpc_analyze(
     const int16_t *pcm,
     int n,
-    int centre,
+    int center,
     double *energy,
     double lsp_rad[C2M_LSP_ORDER]
 )
@@ -256,7 +256,7 @@ void c2m_lpc_analyse(
     double a[C2M_LPC_ORDER + 1];
     double g2;
 
-    windowed_frame(pcm, n, centre, x);
+    windowed_frame(pcm, n, center, x);
     autocorrelation(x, r);
     r[0] *= 1.0 + C2M_LPC_WHITE_NOISE;
     if (!(r[0] > 0.0)) {
