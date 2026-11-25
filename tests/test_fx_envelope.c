@@ -33,6 +33,7 @@ static int name_less(const void *a, const void *b)
     return strcmp((const char *)a, (const char *)b);
 }
 
+#ifndef C2M_POSTFILTER_PDF
 static int cmp_double(const void *a, const void *b)
 {
     double x = *(const double *)a;
@@ -40,6 +41,7 @@ static int cmp_double(const void *a, const void *b)
 
     return (x > y) - (x < y);
 }
+#endif
 
 static int run_file(const char *name)
 {
@@ -47,16 +49,18 @@ static int run_file(const char *name)
     FILE *fp;
     c2fx_front fx;
     c2m_decode md;
-    double *errs = NULL;
-    int nerr = 0;
-    int cap = 0;
     int bad_l = 0;
     int bad_w = 0;
     int bad_lsp = 0;
+#ifndef C2M_POSTFILTER_PDF
+    double *errs = NULL;
+    int nerr = 0;
+    int cap = 0;
     double worst = 0.0;
     const double db_per_q11 = 20.0 * log10(2.0) / 2048.0;
     int within = 0;
     double p99;
+#endif
 
     snprintf(path, sizeof path, "vectors/%s", name);
     fp = fopen(path, "rb");
@@ -80,7 +84,9 @@ static int run_file(const char *name)
         if (n != 8) {
             fprintf(stderr, "%s: trailing %zu bytes\n", name, n);
             fclose(fp);
+#ifndef C2M_POSTFILTER_PDF
             free(errs);
+#endif
             return 1;
         }
         c2m_frame_unpack(bytes, &midx);
@@ -108,6 +114,7 @@ static int run_file(const char *name)
                     bad_lsp += 1;
                 }
             }
+#ifndef C2M_POSTFILTER_PDF
             for (int m = 0; m < env.count; m++) {
                 double err;
 
@@ -132,9 +139,17 @@ static int run_file(const char *name)
                 }
                 errs[nerr++] = err;
             }
+#endif
         }
     }
     fclose(fp);
+#ifdef C2M_POSTFILTER_PDF
+    printf("%-22s L mismatches %d, w0 mismatches %d, LSP mismatches %d\n", name, bad_l, bad_w,
+           bad_lsp);
+    if (bad_l != 0 || bad_w != 0 || bad_lsp != 0) {
+        return 1;
+    }
+#else
     if (nerr == 0) {
         fprintf(stderr, "%s: no harmonics\n", name);
         free(errs);
@@ -155,6 +170,7 @@ static int run_file(const char *name)
                 name, bad_l, bad_w, bad_lsp, worst);
         return 1;
     }
+#endif
     return 0;
 }
 
@@ -167,6 +183,10 @@ int main(void)
     int failed = 0;
 
     printf("w0 is round(2^32 * f0/8000). LSP q1 is round(hz * 2), the 0.5 Hz unit.\n");
+/* Goldens are for the default beta pair; make test EXTRA_CFLAGS=-DC2M_POSTFILTER_PDF skips amplitude. */
+#ifdef C2M_POSTFILTER_PDF
+    printf("amplitude comparison skipped: libc2fx implements only the default post-filter pair\n");
+#endif
     if (dp == NULL) {
         fprintf(stderr, "cannot open vectors (run from the repository root)\n");
         return 1;
