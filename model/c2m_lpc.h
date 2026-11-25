@@ -51,6 +51,9 @@ void c2m_spectrum_shape(
     double shaped[C2M_SPECTRUM_BINS]
 );
 
+/* Spec 6.1. lo/hi are the half-open DFT band of harmonic m, hi capped at 256. */
+void c2m_band_edges(double w0, int harmonic, int *lo, int *hi);
+
 void c2m_envelope_sample(
     const double a[C2M_LPC_ORDER + 1],
     double w0,

@@ -8,6 +8,15 @@
 /* [c2fx design] Bias so floor(pi/w0) does not fall short on exact integers. */
 #define C2M_HARMONIC_COUNT_BIAS 1e-9
 
+/* [c2fx design] Bias so floor(edge) does not fall short when the edge is an
+ * exact integer. On a quantizer w0 the unrounded edge is a multiple of 1/80
+ * (a grid index) or 1/160 (a midpoint). A non-integer is therefore at least
+ * 1/160 from the next integer. The double product lands on the integer or
+ * one ulp under it, about 1e-13, and not over it. 1e-9 is larger than that
+ * shortfall and far smaller than 1/160, so it cannot move a non-tied edge.
+ */
+#define C2M_BAND_EDGE_BIAS 1e-9
+
 int c2m_harmonic_count(double w0)
 {
     double ratio;
@@ -153,20 +162,34 @@ void c2m_spectrum_shape(
     }
 }
 
-/* Half-open band. lo = trunc((m-0.5)*w0/r + 0.5), hi capped at 256. */
-static double band_power(const double *power, int harmonic, double w0)
+/* Half-open band. lo = trunc((m-0.5)*w0/r + 0.5) on the exact value. */
+static int edge_bin(double half_steps, double w0)
 {
     double scale = w0 * (double)C2M_DFT_SIZE / (2.0 * C2M_PI);
-    int lo = (int)floor(((double)harmonic - 0.5) * scale + 0.5);
-    int hi = (int)floor(((double)harmonic + 0.5) * scale + 0.5);
+    int edge = (int)floor(half_steps * scale + 0.5 + C2M_BAND_EDGE_BIAS);
+
+    if (edge < 0) {
+        return 0;
+    }
+    if (edge > C2M_SPECTRUM_BINS) {
+        return C2M_SPECTRUM_BINS;
+    }
+    return edge;
+}
+
+void c2m_band_edges(double w0, int harmonic, int *lo, int *hi)
+{
+    *lo = edge_bin((double)harmonic - 0.5, w0);
+    *hi = edge_bin((double)harmonic + 0.5, w0);
+}
+
+static double band_power(const double *power, int harmonic, double w0)
+{
+    int lo;
+    int hi;
     double sum = 0.0;
 
-    if (lo < 0) {
-        lo = 0;
-    }
-    if (hi > C2M_SPECTRUM_BINS) {
-        hi = C2M_SPECTRUM_BINS;
-    }
+    c2m_band_edges(w0, harmonic, &lo, &hi);
     for (int bin = lo; bin < hi; bin++) {
         sum += power[bin];
     }
