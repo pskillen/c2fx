@@ -33,7 +33,8 @@ MODEL_SRCS := model/c2m_frame.c model/c2m_quant.c model/c2m_decode.c model/c2m_l
 	model/c2m_phase.c model/c2m_synth.c
 MODEL_OBJS := $(MODEL_SRCS:model/%.c=$(BUILD)/model/%.o)
 
-SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c)
+SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c) \
+	src/c2fx_frame.c
 OBJS := $(SRCS:src/%.c=$(BUILD)/%.o)
 
 ARM_CFLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Os -ffunction-sections -fdata-sections
@@ -69,9 +70,9 @@ $(BUILD)/dsp/%.o: src/dsp/%.c src/dsp/c2fx_dsp.h src/dsp/c2fx_fxp.h $(BUILD)/cfl
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc/dsp -c $< -o $@
 
-$(BUILD)/%.o: src/%.c include/c2fx.h $(BUILD)/cflags.stamp
+$(BUILD)/%.o: src/%.c include/c2fx.h src/c2fx_internal.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc -Isrc/dsp -c $< -o $@
 
 test: $(BUILD)/test_version $(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
 		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec
