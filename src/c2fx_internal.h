@@ -63,6 +63,39 @@ static inline int c2fx_pitch_spectrum_shift(const struct c2fx_enc_scratch *s)
 int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
                       struct c2fx_enc_scratch *s);
 
+/* Signal and residual in squared retained FFT counts after a 12-bit
+ * shift of each component. Both terms share 2^(2*(spectrum_shift-26))
+ * as the conversion to squared model FFT units. Pitch is Q20 Hz
+ * in [50, 400], or zero for
+ * absent pitch. Run after c2fx_pitch_hz on the same scratch. LPC analysis
+ * may run on either side of voicing because it preserves the spectrum.
+ */
+typedef struct c2fx_voicing_energy {
+    uint64_t signal;
+    uint64_t error;
+} c2fx_voicing_energy;
+
+c2fx_voicing_energy c2fx_voicing_snr(int32_t hz_q20, const struct c2fx_enc_scratch *s);
+int c2fx_voicing_snr_pass(c2fx_voicing_energy energy);
+
+/* Tilt decision bands for r1/r0: <= 0, (0, 0.5], (0.5, 0.6],
+ * and > 0.6. The input is the same centered PCM window as LPC. Tilt
+ * rebuilds the Hann taps in the dead refinement workspace below the FFT.
+ * Pitch -> LPC -> voicing and pitch -> voicing -> LPC are both safe.
+ */
+typedef enum c2fx_voicing_tilt_band {
+    C2FX_TILT_REJECT,
+    C2FX_TILT_POSITIVE,
+    C2FX_TILT_BRIDGE,
+    C2FX_TILT_ACCEPT
+} c2fx_voicing_tilt_band;
+
+c2fx_voicing_tilt_band c2fx_voicing_tilt(const int16_t x[C2FX_ANALYSIS_LEN], struct c2fx_enc_scratch *s);
+
+/* Base inputs and all flag results are 0 or 1; tilt is a decision band. */
+int c2fx_voicing_base(int snr_pass, c2fx_voicing_tilt_band tilt);
+int c2fx_voicing_final(int prev_base, int base, int next_base, c2fx_voicing_tilt_band tilt);
+
 int c2fx_quant_w0_index(int32_t hz_q20);
 int c2fx_quant_energy_index(const c2fx_enc_row *row);
 void c2fx_quant_lsp_indices(const c2fx_enc_row *row, int d[C2FX_LSP_ORDER]);

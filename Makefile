@@ -65,7 +65,7 @@ endif
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c) \
 	src/c2fx_frame.c src/c2fx_quant.c src/c2fx_lpc.c src/c2fx_envelope.c \
-	src/c2fx_phase.c src/c2fx_synth.c src/c2fx_lost.c src/c2fx_decode.c src/c2fx_analysis.c src/c2fx_pitch.c
+	src/c2fx_phase.c src/c2fx_synth.c src/c2fx_lost.c src/c2fx_decode.c src/c2fx_analysis.c src/c2fx_pitch.c src/c2fx_voicing.c
 ifeq ($(EXTERNAL_DSP),1)
 SRCS := $(filter-out $(BUILTIN_DSP_SRCS),$(SRCS))
 endif
@@ -125,13 +125,13 @@ $(BUILD)/%.o: src/%.c include/c2fx.h include/c2fx_types.h src/c2fx_internal.h sr
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc -Isrc/dsp -c $< -o $@
 
-$(BUILD)/c2fx_analysis.o $(BUILD)/c2fx_pitch.o: src/tables/c2fx_window.h
+$(BUILD)/c2fx_analysis.o $(BUILD)/c2fx_pitch.o $(BUILD)/c2fx_voicing.o: src/tables/c2fx_window.h
 
 test: $(BUILD)/test_version $(addprefix $(BUILD)/test-version/,$(VERSION_CASES)) \
 		$(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
 		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec \
 		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope \
-		$(BUILD)/test_fx_decode $(BUILD)/test_fx_robust $(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch \
+		$(BUILD)/test_fx_decode $(BUILD)/test_fx_robust $(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch $(BUILD)/test_fx_voicing \
 		$(BUILD)/test_model_quant_enc $(BUILD)/test_model_encoder $(BUILD)/test_model_rules \
 		$(BUILD)/test_lsd_helper_self test-external-dsp test-crc
 	$(BUILD)/test_version
@@ -141,6 +141,7 @@ test: $(BUILD)/test_version $(addprefix $(BUILD)/test-version/,$(VERSION_CASES))
 	done
 	$(BUILD)/test_fx_analysis
 	$(BUILD)/test_fx_pitch
+	$(BUILD)/test_fx_voicing
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
 	$(BUILD)/test_model_vectors
@@ -224,7 +225,7 @@ $(BUILD)/test_fx_frame: tests/test_fx_frame.c $(BUILD)/libc2fx.a $(MODEL_OBJS) s
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch: $(BUILD)/%: tests/%.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(wildcard model/*.h) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
+$(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch $(BUILD)/test_fx_voicing: $(BUILD)/%: tests/%.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(wildcard model/*.h) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
