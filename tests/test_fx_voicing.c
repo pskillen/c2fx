@@ -181,6 +181,11 @@ static int run_file(const char *path, int voice)
                 path, stats[MODEL_PITCH].final_matches, n / C2FX_HOP);
         failed = 1;
     }
+    if (tilt_mismatches != 0) {
+        fprintf(stderr, "%s: tilt decision gate failed (%d/%d mismatches)\n",
+                path, tilt_mismatches, rows);
+        failed = 1;
+    }
     free(packed);
     free(pcm);
     return failed;
@@ -272,6 +277,11 @@ static int rule_boundaries(void)
         fprintf(stderr, "voicing: 6 dB SNR threshold or sentinel failed\n");
         failed = 1;
     }
+    c2fx_voicing_energy invalid_pitch = c2fx_voicing_snr(1000 * HZ_ONE, &scratch);
+    if (invalid_pitch.signal != 0 || invalid_pitch.error != 0) {
+        fprintf(stderr, "voicing: out-of-range pitch must return zero energy\n");
+        failed = 1;
+    }
     /* At 400 Hz, m=1..3 spans [200,1400) Hz, bins 13 through 89. */
     for (int k = 12; k <= 90; k++) {
         scratch.work.refinement.spectrum[2 * k] = 4096 * 1000;
@@ -312,10 +322,30 @@ static int rule_boundaries(void)
     return failed;
 }
 
+static int check_window_dtft(void)
+{
+    for (int i = 0; i < 104; i++) {
+        double sum = 0.0;
+
+        for (int n = -C2FX_ANALYSIS_CENTER; n <= C2FX_ANALYSIS_CENTER; n++) {
+            double hann = (1.0 + cos(C2M_PI * n / C2FX_ANALYSIS_CENTER)) / 2.0;
+            sum += hann * cos(2.0 * C2M_PI * n * i / (C2FX_DFT * 8));
+        }
+        long expected = lround(16384.0 * sum / C2FX_ANALYSIS_CENTER);
+        if (c2fx_voicing_window_dtft[i] != expected) {
+            fprintf(stderr, "voicing: Hann DTFT entry %d is %d, expected %ld\n",
+                    i, c2fx_voicing_window_dtft[i], expected);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int main(void)
 {
     int failed = rule_boundaries();
 
+    failed |= check_window_dtft();
     failed |= edge_rows();
     failed |= run_group("tests/data/voice/*.pcm", 4, 1);
     failed |= run_group("tests/data/signals/*.pcm", 10, 0);

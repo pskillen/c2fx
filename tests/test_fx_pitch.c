@@ -94,13 +94,13 @@ static void print_stats(const char *path, const char *tracking, const pitch_stat
 static int check_spectrum(const int16_t *x, struct c2fx_enc_scratch *s, const char *name)
 {
     int32_t hann[C2FX_ANALYSIS_CENTER + 1];
-    double expected_re[81], expected_im[81], peak = 0, error = 0;
+    double expected_re[90], expected_im[90], peak = 0, error = 0;
     double scale = ldexp(1.0, -c2fx_pitch_spectrum_shift(s));
     const int32_t *spectrum = s->work.refinement.spectrum;
     c2fx_enc_row row;
 
     c2fx_hann_q38(hann);
-    for (int k = 0; k <= 80; k++) {
+    for (int k = 0; k <= 89; k++) {
         double re = 0, im = 0;
         for (int i = 0; i < C2FX_ANALYSIS_LEN; i++) {
             int j = i <= C2FX_ANALYSIS_CENTER ? i : C2FX_ANALYSIS_LEN - 1 - i;
@@ -114,7 +114,7 @@ static int check_spectrum(const int16_t *x, struct c2fx_enc_scratch *s, const ch
         peak = fmax(peak, hypot(re, im));
     }
     for (int pass = 0; pass < 2; pass++) {
-        for (int k = 0; k <= 80; k++) {
+        for (int k = 0; k <= 89; k++) {
             double re = spectrum[2 * k];
             double im = k ? spectrum[2 * k + 1] : 0;
             error = fmax(error, hypot(re - expected_re[k], im - expected_im[k]));

@@ -16,7 +16,7 @@
  * (1 + cos(2*pi*n/278))/2 * cos(2*pi*n*i/(512*8))).
  * The largest half-band is 12.8 bins, so interpolation reaches entry 103.
  */
-static const int16_t window_dtft[104] = {
+const int16_t c2fx_voicing_window_dtft[104] = {
     16384, 16335, 16190, 15951, 15620, 15203, 14705, 14134,
     13497, 12802, 12060, 11279, 10470, 9642, 8806, 7970,
     7145, 6339, 5560, 4815, 4110, 3450, 2840, 2283,
@@ -38,10 +38,10 @@ static int32_t window_response(uint32_t bin_hz, uint32_t harmonic_hz)
     /* One table step is 2,048,000 in Q20 Hz. Keep 10 fraction bits. */
     uint32_t step = offset / 2000;
     uint32_t i = step >> 10;
-    int32_t left = window_dtft[i];
+    int32_t left = c2fx_voicing_window_dtft[i];
     int32_t frac = (int32_t)(step & 1023);
 
-    return left + (((window_dtft[i + 1] - left) * frac + 512) >> 10);
+    return left + (((c2fx_voicing_window_dtft[i + 1] - left) * frac + 512) >> 10);
 }
 
 static uint32_t band_edge(uint32_t twice_hz)
@@ -54,7 +54,7 @@ c2fx_voicing_energy c2fx_voicing_snr(int32_t hz_q20, const struct c2fx_enc_scrat
 {
     c2fx_voicing_energy energy = {0, 0};
 
-    if (hz_q20 <= 0) {
+    if (hz_q20 < 50 * (int32_t)HZ_ONE || hz_q20 > 400 * (int32_t)HZ_ONE) {
         return energy;
     }
     const int32_t *spectrum = s->work.refinement.spectrum;
