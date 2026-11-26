@@ -277,10 +277,19 @@ static int rule_boundaries(void)
         fprintf(stderr, "voicing: 6 dB SNR threshold or sentinel failed\n");
         failed = 1;
     }
-    c2fx_voicing_energy invalid_pitch = c2fx_voicing_snr(1000 * HZ_ONE, &scratch);
-    if (invalid_pitch.signal != 0 || invalid_pitch.error != 0) {
-        fprintf(stderr, "voicing: out-of-range pitch must return zero energy\n");
-        failed = 1;
+    const int invalid_hz[] = {49, 0, -1, 401, 1000};
+    for (size_t k = 0; k < sizeof scratch.work.refinement.spectrum / sizeof scratch.work.refinement.spectrum[0]; k++) {
+        scratch.work.refinement.spectrum[k] = 4096000;
+    }
+    for (size_t i = 0; i < sizeof invalid_hz / sizeof invalid_hz[0]; i++) {
+        c2fx_voicing_energy energy = c2fx_voicing_snr(invalid_hz[i] * HZ_ONE, &scratch);
+        if (energy.signal != 0 || energy.error != 0) {
+            fprintf(stderr, "voicing: out-of-range pitch %d Hz must return zero energy\n", invalid_hz[i]);
+            return 1;
+        }
+    }
+    for (size_t k = 0; k < sizeof scratch.work.refinement.spectrum / sizeof scratch.work.refinement.spectrum[0]; k++) {
+        scratch.work.refinement.spectrum[k] = 0;
     }
     /* At 400 Hz, m=1..3 spans [200,1400) Hz, bins 13 through 89. */
     for (int k = 12; k <= 90; k++) {

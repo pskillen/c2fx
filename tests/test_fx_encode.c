@@ -98,6 +98,44 @@ static int check_resume(const char *path, const int16_t *pcm, int frames,
     return 0;
 }
 
+/* Recompute the two row decisions from their specified centers, independently
+ * of the streaming glue. This checks neighbor selection and pitch state. */
+static int check_rows(const c2fx_enc_t *before, const int16_t *input,
+                      const c2fx_enc_t *after, const uint8_t *bits)
+{
+    enum { HISTORY = C2FX_PITCH_SPAN - C2FX_HOP,
+           OFFSET = C2FX_PITCH_BEFORE - C2FX_ANALYSIS_CENTER };
+    int16_t samples[HISTORY + C2FX_FRAME_LEN];
+    struct c2fx_enc_scratch scratch;
+    int base[2];
+    c2fx_voicing_tilt_band tilt[2];
+    int32_t prev = before->prev_hz_q20;
+    memcpy(samples, before->pcm, HISTORY * sizeof *samples);
+    memcpy(samples + HISTORY, input, C2FX_FRAME_LEN * sizeof *samples);
+    for (int row = 0; row < 2; row++) {
+        const int16_t *x = samples + row * C2FX_HOP;
+        int32_t hz = c2fx_pitch_hz(x, prev, &scratch);
+        int pass = c2fx_voicing_snr_pass(c2fx_voicing_snr(hz, &scratch));
+        tilt[row] = c2fx_voicing_tilt(x + OFFSET, &scratch);
+        base[row] = c2fx_voicing_base(pass, tilt[row]);
+        prev = base[row] ? hz : 0;
+    }
+    if (after->prev_hz_q20 != prev) {
+        fprintf(stderr, "rows: previous pitch differs from refined voiced pitch\n");
+        return 1;
+    }
+    if (after->pending.v_a != c2fx_voicing_final(before->even_base, base[0], base[1], tilt[0])) {
+        fprintf(stderr, "rows: v_a lookahead or odd row center differs\n");
+        return 1;
+    }
+    if (before->ready && ((bits[0] >> 6) & 1) !=
+        c2fx_voicing_final(before->prev_odd_base, before->even_base, base[0], before->even_tilt)) {
+        fprintf(stderr, "rows: v_b lookahead or tilt differs\n");
+        return 1;
+    }
+    return 0;
+}
+
 static int compare_stream(const char *path, const int16_t *pcm, int n)
 {
     c2fx_enc_t state;
@@ -118,7 +156,15 @@ static int compare_stream(const char *path, const int16_t *pcm, int n)
     c2fx_enc_init(&state);
     for (int j = 0; j <= frames; j++) {
         uint8_t *actual = original + (size_t)j * C2FX_BITS_BYTES;
-        c2fx_encode(&state, j < frames ? pcm + j * C2FX_FRAME_LEN : zero, actual, &scratch);
+        const int16_t *input = j < frames ? pcm + j * C2FX_FRAME_LEN : zero;
+        c2fx_enc_t before = state;
+        c2fx_encode(&state, input, actual, &scratch);
+        if (j < 12 && check_rows(&before, input, &state, actual)) {
+            fprintf(stderr, "%s: row check failed on call %d\n", path, j);
+            free(original);
+            free(expected);
+            return 1;
+        }
         if (j > 0) {
             const uint8_t *ref = expected + (j - 1) * C2FX_BITS_BYTES;
             identical += memcmp(actual, ref, C2FX_BITS_BYTES) == 0;
@@ -262,6 +308,48 @@ static int check_lookahead(void)
     return 0;
 }
 
+static int check_row_combinations(void)
+{
+    int16_t pcm[3 * C2FX_FRAME_LEN];
+    uint8_t bits[C2FX_BITS_BYTES];
+    for (int center = 80; center <= 240; center += 80) {
+        for (int width = 40; width <= 80; width += 20) {
+            for (int j = 0; j < 3 * C2FX_FRAME_LEN; j++) {
+                int rel = j - center;
+                int high = abs(rel) <= width;
+                pcm[j] = (int16_t)lround((high ? 16000 : 4000) *
+                    cos(2.0 * C2M_PI * (high ? 1200 : 200) * rel / 8000.0));
+            }
+            c2fx_enc_t state;
+            c2fx_scratch_t scratch;
+            c2fx_enc_init(&state);
+            for (int frame = 0; frame < 3; frame++) {
+                c2fx_enc_t initial = state;
+                for (int prev = 0; prev < 2; prev++) {
+                    for (int current = 0; current < 2; current++) {
+                        for (int band = C2FX_TILT_REJECT; band <= C2FX_TILT_ACCEPT; band++) {
+                            c2fx_enc_t trial = initial;
+                            trial.ready = 1;
+                            trial.prev_odd_base = (uint8_t)prev;
+                            trial.even_base = (uint8_t)current;
+                            trial.even_tilt = (uint8_t)band;
+                            c2fx_enc_t before = trial;
+                            c2fx_encode(&trial, pcm + frame * C2FX_FRAME_LEN, bits, &scratch);
+                            if (check_rows(&before, pcm + frame * C2FX_FRAME_LEN, &trial, bits)) {
+                                fprintf(stderr, "row fixture: center %d width %d frame %d prev %d current %d tilt %d\n",
+                                        center, width, frame, prev, current, band);
+                                return 1;
+                            }
+                        }
+                    }
+                }
+                c2fx_encode(&state, pcm + frame * C2FX_FRAME_LEN, bits, &scratch);
+            }
+        }
+    }
+    return 0;
+}
+
 static int check_short_stream(void)
 {
     int16_t pcm[C2FX_FRAME_LEN] = {0};
@@ -291,6 +379,7 @@ int main(void)
     globfree(&paths);
     failed |= check_short_stream();
     failed |= check_lookahead();
+    failed |= check_row_combinations();
     failed |= check_edges();
     return failed;
 }
