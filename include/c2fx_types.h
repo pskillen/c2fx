@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The c2fx Authors
 /* Members are private and may change in any release. Callers only
- * declare and pass decoder state and scratch objects.
+ * declare and pass codec state and scratch objects.
  */
 
 #ifndef C2FX_TYPES_H
@@ -92,6 +92,20 @@ struct c2fx_dec_scratch {
 #define C2FX_PITCH_GRID_GUARD 8
 #define C2FX_PITCH_GRID_LAST 104
 
+#ifndef C2FX_NO_ENCODER
+struct c2fx_enc {
+    int16_t pcm[C2FX_PITCH_SPAN + C2FX_HOP];
+    c2fx_indices pending;
+    int32_t prev_hz_q20;
+    uint8_t ready;
+    uint8_t prev_odd_base;
+    uint8_t even_base;
+    uint8_t even_tilt;
+};
+
+typedef struct c2fx_enc c2fx_enc_t;
+#endif
+
 /* LPC and pitch use the workspace sequentially. */
 struct c2fx_enc_scratch {
     union {
@@ -126,7 +140,9 @@ struct c2fx_enc_scratch {
 
 union c2fx_scratch {
     struct c2fx_dec_scratch dec;
+#ifndef C2FX_NO_ENCODER
     struct c2fx_enc_scratch enc;
+#endif
 };
 
 typedef struct c2fx_dec c2fx_dec_t;

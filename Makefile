@@ -27,13 +27,17 @@
 ARM_PREFIX ?= arm-none-eabi-
 CSKY_PREFIX ?= csky-elf-
 
+ifeq ($(C2FX_NO_ENCODER),1)
+DECODER_SUFFIX := -decoder
+endif
+
 CC ?= gcc
 AR ?= ar
 NM ?= nm
 ifeq ($(EXTERNAL_DSP),1)
-BUILD ?= build/host-external-dsp
+BUILD ?= build/host-external-dsp$(DECODER_SUFFIX)
 else
-BUILD ?= build/host
+BUILD ?= build/host$(DECODER_SUFFIX)
 endif
 
 CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror -Wdouble-promotion -Wfloat-conversion
@@ -65,7 +69,14 @@ endif
 
 SRCS := src/c2fx_version.c $(wildcard src/tables/*.c) $(wildcard src/dsp/*.c) \
 	src/c2fx_frame.c src/c2fx_quant.c src/c2fx_lpc.c src/c2fx_envelope.c \
-	src/c2fx_phase.c src/c2fx_synth.c src/c2fx_lost.c src/c2fx_decode.c src/c2fx_analysis.c src/c2fx_pitch.c src/c2fx_voicing.c
+	src/c2fx_phase.c src/c2fx_synth.c src/c2fx_lost.c src/c2fx_decode.c
+ifeq ($(C2FX_NO_ENCODER),1)
+CPPFLAGS += -DC2FX_NO_ENCODER
+SRCS := $(filter-out src/tables/c2fx_window.c,$(SRCS))
+else
+SRCS += src/c2fx_analysis.c src/c2fx_pitch.c src/c2fx_voicing.c src/c2fx_encode.c
+ENC_TESTS := $(addprefix $(BUILD)/,test_fx_analysis test_fx_pitch test_fx_voicing test_fx_encode test_fx_encode_centers)
+endif
 ifeq ($(EXTERNAL_DSP),1)
 SRCS := $(filter-out $(BUILTIN_DSP_SRCS),$(SRCS))
 endif
@@ -83,8 +94,8 @@ ifeq ($(CSKY_DSP),1)
 CSKY_CFLAGS += -Wa,-mdsp
 endif
 
-.PHONY: all archive test sanitize cross-arm cross-csky clean force wav wavfx enc \
-	crc test-crc test-external-dsp check-external-dsp
+.PHONY: all archive test sanitize cross-arm cross-csky clean force wav wavfx enc encfx wavenc \
+	crc test-crc test-external-dsp check-external-dsp test-decoder-only
 
 all: archive
 
@@ -131,7 +142,7 @@ test: $(BUILD)/test_version $(addprefix $(BUILD)/test-version/,$(VERSION_CASES))
 		$(BUILD)/test_tables $(BUILD)/test_model_frame $(BUILD)/test_model_vectors \
 		$(BUILD)/test_model_envelope $(BUILD)/test_model_synth $(BUILD)/test_model_vs_c2dec \
 		$(BUILD)/test_dsp $(BUILD)/test_fx_frame $(BUILD)/test_fx_envelope \
-		$(BUILD)/test_fx_decode $(BUILD)/test_fx_robust $(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch $(BUILD)/test_fx_voicing \
+		$(BUILD)/test_fx_decode $(BUILD)/test_fx_robust $(ENC_TESTS) \
 		$(BUILD)/test_model_quant_enc $(BUILD)/test_model_encoder $(BUILD)/test_model_rules \
 		$(BUILD)/test_lsd_helper_self test-external-dsp test-crc
 	$(BUILD)/test_version
@@ -139,9 +150,7 @@ test: $(BUILD)/test_version $(addprefix $(BUILD)/test-version/,$(VERSION_CASES))
 		actual=$$($(BUILD)/test-version/$$version); \
 		test "$$actual" = "c2fx version: $$version"; \
 	done
-	$(BUILD)/test_fx_analysis
-	$(BUILD)/test_fx_pitch
-	$(BUILD)/test_fx_voicing
+	@set -eu; for test in $(ENC_TESTS); do "$$test"; done
 	$(BUILD)/test_tables
 	$(BUILD)/test_model_frame
 	$(BUILD)/test_model_vectors
@@ -225,9 +234,12 @@ $(BUILD)/test_fx_frame: tests/test_fx_frame.c $(BUILD)/libc2fx.a $(MODEL_OBJS) s
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
-$(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch $(BUILD)/test_fx_voicing: $(BUILD)/%: tests/%.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(wildcard model/*.h) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
+$(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch $(BUILD)/test_fx_voicing $(BUILD)/test_fx_encode: $(BUILD)/%: tests/%.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(wildcard model/*.h) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
+
+$(BUILD)/test_fx_encode_centers: tests/test_fx_encode_centers.c src/c2fx_encode.c $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc $< $(BUILD)/libc2fx.a -o $@
 
 $(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
@@ -236,6 +248,12 @@ $(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_O
 $(BUILD)/test_fx_decode: tests/test_fx_decode.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(HOST_DSP_OBJS) include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a $(HOST_DSP_OBJS) -lm -o $@
+
+test-decoder-only:
+	$(MAKE) archive test-crc C2FX_NO_ENCODER=1 BUILD=build/host-decoder
+	$(NM) --defined-only build/host-decoder/libc2fx.a > build/host-decoder/defined-symbols.txt
+	@awk '$$NF ~ /^c2fx_(enc|encode|pitch|voicing|analysis|lpc_analyze)/ { print "decoder archive defines " $$NF; bad = 1 } END { exit bad }' build/host-decoder/defined-symbols.txt
+	@printf '%s\n' 'decoder-only: CRC matches and encoder symbols absent'
 
 test-external-dsp: $(BUILD)/test_fx_decode
 	$(MAKE) check-external-dsp EXTERNAL_DSP=1 BUILD=$(BUILD)-external-dsp REFERENCE_BUILD=$(BUILD)
@@ -259,7 +277,7 @@ sanitize:
 	$(MAKE) test BUILD=build/sanitize EXTRA_CFLAGS='-fsanitize=address,undefined -fno-sanitize-recover=all -DC2FX_ROBUST_FRAMES=1000000'
 
 cross-arm:
-	$(MAKE) archive BUILD=build/arm CC='$(ARM_PREFIX)gcc' AR='$(ARM_PREFIX)ar' EXTRA_CFLAGS='$(ARM_CFLAGS)'
+	$(MAKE) archive BUILD=build/arm$(DECODER_SUFFIX) CC='$(ARM_PREFIX)gcc' AR='$(ARM_PREFIX)ar' EXTRA_CFLAGS='$(ARM_CFLAGS)'
 
 ifeq ($(CSKY_DSP),1)
 CSKY_BUILD := build/csky-dsp
@@ -268,7 +286,7 @@ CSKY_BUILD := build/csky
 endif
 
 cross-csky:
-	$(MAKE) archive BUILD=$(CSKY_BUILD) CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
+	$(MAKE) archive BUILD=$(CSKY_BUILD)$(DECODER_SUFFIX) CC='$(CSKY_PREFIX)gcc' AR='$(CSKY_PREFIX)ar' EXTRA_CFLAGS='$(CSKY_CFLAGS)'
 
 build/c2m_dec: model/c2m_dec.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
@@ -278,12 +296,26 @@ build/c2m_enc: model/c2m_enc.c $(MODEL_OBJS) $(BUILD)/libc2fx.a $(BUILD)/cflags.
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
+PCM_INPUTS := $(wildcard tests/data/*/*.pcm)
+
 enc: build/c2m_enc
 	mkdir -p build/enc
 	@set -eu; \
-	for f in tests/data/voice/*.pcm tests/data/signals/*.pcm; do \
+	for f in $(PCM_INPUTS); do \
 		base=$$(basename "$$f" .pcm); \
 		build/c2m_enc "$$f" "build/enc/$$base.c2"; \
+	done
+
+build/c2fx_enc: host/c2fx_enc.c $(BUILD)/libc2fx.a include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< $(BUILD)/libc2fx.a -o $@
+
+encfx: build/c2fx_enc
+	mkdir -p build/encfx
+	@set -eu; \
+	for f in $(PCM_INPUTS); do \
+		base=$$(basename "$$f" .pcm); \
+		build/c2fx_enc "$$f" "build/encfx/$$base.c2"; \
 	done
 
 build/c2fx_dec: host/c2fx_dec.c host/c2_header.h $(BUILD)/libc2fx.a include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
@@ -316,6 +348,16 @@ wavfx: build/c2fx_dec
 		build/c2fx_dec "$$f" "build/wavfx/$$base.pcm"; \
 		python3 tools/pcm_to_wav.py "build/wavfx/$$base.pcm" "build/wavfx/$$base.wav"; \
 		rm -f "build/wavfx/$$base.pcm"; \
+	done
+
+wavenc: encfx build/c2fx_dec
+	mkdir -p build/wavenc
+	@set -eu; \
+	for f in $(PCM_INPUTS); do \
+		base=$$(basename "$$f" .pcm); \
+		build/c2fx_dec "build/encfx/$$base.c2" "build/wavenc/$$base.pcm"; \
+		python3 tools/pcm_to_wav.py "build/wavenc/$$base.pcm" "build/wavenc/$$base.wav"; \
+		rm -f "build/wavenc/$$base.pcm"; \
 	done
 
 wav: build/c2m_dec
