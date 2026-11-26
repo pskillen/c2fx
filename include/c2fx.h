@@ -16,6 +16,24 @@
 #define C2FX_DEC_BYTES (sizeof(c2fx_dec_t))
 #define C2FX_SCRATCH_BYTES (sizeof(c2fx_scratch_t))
 
+#ifndef C2FX_NO_ENCODER
+#define C2FX_ENC_BYTES (sizeof(c2fx_enc_t))
+
+void c2fx_enc_init(c2fx_enc_t *e);
+
+/* Each call consumes 160 samples and produces one packed frame. The
+ * encoder delays output by 160 samples (one frame) for voicing lookahead.
+ * Input before the start is zero. The first call returns an encoded silence
+ * frame. After the last PCM frame, pass one zero-filled frame to emit the
+ * last delayed frame. Pass a c2fx_scratch_t object as scratch.
+ */
+void c2fx_encode(
+    c2fx_enc_t *e,
+    const int16_t pcm[C2FX_FRAME_LEN],
+    uint8_t bits[C2FX_BITS_BYTES],
+    void *scratch);
+#endif
+
 /* When compiling c2fx_version.c, a consumer may pass -DC2FX_VERSION="\"x.y.z\"".
  * The default is "local".
  */

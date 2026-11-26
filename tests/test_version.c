@@ -61,6 +61,12 @@ int main(void)
                 C2FX_SCRATCH_BYTES, C2FX_DEC_BYTES);
         return 1;
     }
+#ifndef C2FX_NO_ENCODER
+    if (C2FX_ENC_BYTES > 1536) {
+        fprintf(stderr, "encoder state %zu bytes (max 1536)\n", C2FX_ENC_BYTES);
+        return 1;
+    }
+#endif
     if (C2FX_FRAME_LEN != 160) {
         fprintf(stderr, "C2FX_FRAME_LEN is %d, expected 160\n", C2FX_FRAME_LEN);
         return 1;

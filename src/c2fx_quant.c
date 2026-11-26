@@ -121,6 +121,7 @@ void c2fx_dequant_frame(c2fx_front *st, const c2fx_indices *idx, c2fx_subframe o
     }
 }
 
+#ifndef C2FX_NO_ENCODER
 /* Midpoints between adjacent energy levels (spec 10.1.3), rounded
  * up to the Q24 log2 grid. Entry k is
  * ceil(((-10 + (k + 0.5) * 50/32) / 10) * log2(10) * 2^24).
@@ -187,3 +188,4 @@ int c2fx_quant_w0_index(int32_t hz_q20)
     index = (hz_q20 - min + step / 2) / step;
     return index < 127 ? index : 127;
 }
+#endif

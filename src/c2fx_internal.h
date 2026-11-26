@@ -9,6 +9,10 @@
 /* Gray-decoded field indices. Every 8-byte pattern is a frame. */
 void c2fx_frame_unpack(const uint8_t in[8], c2fx_indices *idx);
 
+#ifndef C2FX_NO_ENCODER
+void c2fx_frame_pack(const c2fx_indices *idx, uint8_t out[8]);
+#endif
+
 void c2fx_front_init(c2fx_front *st);
 
 /* Voicing, w0, energy and LSPs for sub-frame a (out[0]) and b (out[1]). */
@@ -52,7 +56,7 @@ int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
  * The input is x times the Q38 Hann table divided by 2^spectrum_shift;
  * window products are rounded. LPC leaves spectrum and shift intact,
  * and 3340 bytes below the spectrum are free while it lives. Another pitch
- * row overwrites both. Bins 0..80 have complex error at most
+ * row overwrites both. Bins 0..89 have complex error at most
  * max(96 counts, 0.005% of the in-band peak); measured worst 0.0031%.
  */
 static inline int c2fx_pitch_spectrum_shift(const struct c2fx_enc_scratch *s)
@@ -66,14 +70,15 @@ int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
 /* Signal and residual in squared retained FFT counts after a 12-bit
  * shift of each component. Both terms share 2^(2*(spectrum_shift-26))
  * as the conversion to squared model FFT units. Pitch is Q20 Hz
- * in [50, 400], or zero for
- * absent pitch. Run after c2fx_pitch_hz on the same scratch. LPC analysis
+ * in [50, 400]. Values outside that range return zero energy. Run after c2fx_pitch_hz on the same scratch. LPC analysis
  * may run on either side of voicing because it preserves the spectrum.
  */
 typedef struct c2fx_voicing_energy {
     uint64_t signal;
     uint64_t error;
 } c2fx_voicing_energy;
+
+extern const int16_t c2fx_voicing_window_dtft[104];
 
 c2fx_voicing_energy c2fx_voicing_snr(int32_t hz_q20, const struct c2fx_enc_scratch *s);
 int c2fx_voicing_snr_pass(c2fx_voicing_energy energy);

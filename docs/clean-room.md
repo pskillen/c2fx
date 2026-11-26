@@ -79,6 +79,7 @@ The maintainer builds upstream at that commit outside every repository and gives
 | 2026-11-25 | P4b implementer | Implementer | This repository's `docs/spec/c2-3200.md` revision 5 (sections 4 and 7–9 and the defaults), `model/`, and `vectors/`. No upstream source | Fixed-point decoder back half: minimum phase, harmonic synthesis, overlap-add, lost frames, public decode API | n/a (no source read) | c2-3200.md rev 5 |
 | 2026-11-25 | P6a implementer | Implementer | This repository's spec (sections 3.3, 3.4, 10 and the defaults), float model, tables and test PCM | Fixed-point Hann window, LPC and LSP analysis, energy and LSP quantizers | n/a | `docs/spec/c2-3200.md` at `581e577` |
 | 2026-11-26 | P6b voicing implementer | Implementer | This repository's spec (section 10.2.4 and the defaults), float voicing and encoder model, fixed-point pitch and analysis, and test PCM | Fixed-point SNR, tilt, and one-row voicing lookahead | n/a | `docs/spec/c2-3200.md` at `9390bc0` |
+| 2026-11-26 | P6b encoder implementer | Implementer | This repository's spec (sections 2, 3 and 10 and the defaults), float encoder model, fixed-point analysis, pitch and voicing, and test PCM | Public streaming fixed-point encoder, frame packing, host tool, and model agreement test | n/a | `docs/spec/c2-3200.md` at `8e93650` |
 
 ## Open questions
 

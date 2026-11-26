@@ -39,3 +39,27 @@ void c2fx_frame_unpack(const uint8_t in[8], c2fx_indices *idx)
         idx->d[j] = (int)gray_decode(get_field(in, 14 + 5 * j, 5));
     }
 }
+
+#ifndef C2FX_NO_ENCODER
+static void put_field(uint8_t out[8], int bit, int width, unsigned value)
+{
+    value ^= value >> 1;
+    for (int i = width - 1; i >= 0; i--, bit++) {
+        out[bit >> 3] |= (uint8_t)(((value >> i) & 1u) << (7 - (bit & 7)));
+    }
+}
+
+void c2fx_frame_pack(const c2fx_indices *idx, uint8_t out[8])
+{
+    for (int j = 0; j < 8; j++) {
+        out[j] = 0;
+    }
+    put_field(out, 0, 1, (unsigned)idx->v_a);
+    put_field(out, 1, 1, (unsigned)idx->v_b);
+    put_field(out, 2, 7, (unsigned)idx->i);
+    put_field(out, 9, 5, (unsigned)idx->e);
+    for (int j = 0; j < C2FX_LSP_ORDER; j++) {
+        put_field(out, 14 + 5 * j, 5, (unsigned)idx->d[j]);
+    }
+}
+#endif
