@@ -25,7 +25,7 @@ print("""// SPDX-License-Identifier: MIT
 #include "c2fx_window.h"
 
 /* Fifth forward differences of the symmetric 279-point Hann half-window. */
-static const int8_t hann_delta5[C2FX_ANALYSIS_CENTER + 1] = {""")
+static const int8_t hann_delta5[135] = {""")
 for i in range(0, len(differences[-1]), 16):
     print("    " + ", ".join(str(d) for d in differences[-1][i:i + 16]) + ",")
 print("""};
@@ -41,6 +41,8 @@ print("""
         d1 += d2;
         d2 += d3;
         d3 += d4;
-        d4 += hann_delta5[i];
+        if (i < 135) {
+            d4 += hann_delta5[i];
+        }
     }
 }""")

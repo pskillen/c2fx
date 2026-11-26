@@ -5,7 +5,7 @@
 #include "c2fx_window.h"
 
 /* Fifth forward differences of the symmetric 279-point Hann half-window. */
-static const int8_t hann_delta5[C2FX_ANALYSIS_CENTER + 1] = {
+static const int8_t hann_delta5[135] = {
     -3, 4, -1, -1, 3, -2, 4, -3, 2, 3, 0, -3, 9, -5, 1, 7,
     -4, 2, 7, -6, 6, 2, 0, 4, -1, 6, -2, 5, 1, 3, 2, 3,
     0, 6, 1, 2, 2, 7, -2, 4, 4, 4, 0, 3, 8, -5, 12, -4,
@@ -31,6 +31,8 @@ void c2fx_hann_q38(int32_t half[C2FX_ANALYSIS_CENTER + 1])
         d1 += d2;
         d2 += d3;
         d3 += d4;
-        d4 += hann_delta5[i];
+        if (i < 135) {
+            d4 += hann_delta5[i];
+        }
     }
 }
