@@ -119,7 +119,7 @@ static int check_spectrum(const int16_t *x, struct c2fx_enc_scratch *s, const ch
             double im = k ? spectrum[2 * k + 1] : 0;
             error = fmax(error, hypot(re - expected_re[k], im - expected_im[k]));
         }
-        if (error > fmax(4096.0, 0.02 * peak)) {
+        if (error > fmax(96.0, 0.00005 * peak)) {
             fprintf(stderr, "%s: spectrum DFT failed (error %.1f, peak %.1f, pass %d)\n", name, error, peak, pass);
             return 1;
         }
