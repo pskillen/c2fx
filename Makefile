@@ -75,7 +75,7 @@ CPPFLAGS += -DC2FX_NO_ENCODER
 SRCS := $(filter-out src/tables/c2fx_window.c,$(SRCS))
 else
 SRCS += src/c2fx_analysis.c src/c2fx_pitch.c src/c2fx_voicing.c src/c2fx_encode.c
-ENC_TESTS := $(addprefix $(BUILD)/,test_fx_analysis test_fx_pitch test_fx_voicing test_fx_encode)
+ENC_TESTS := $(addprefix $(BUILD)/,test_fx_analysis test_fx_pitch test_fx_voicing test_fx_encode test_fx_encode_centers)
 endif
 ifeq ($(EXTERNAL_DSP),1)
 SRCS := $(filter-out $(BUILTIN_DSP_SRCS),$(SRCS))
@@ -95,7 +95,7 @@ CSKY_CFLAGS += -Wa,-mdsp
 endif
 
 .PHONY: all archive test sanitize cross-arm cross-csky clean force wav wavfx enc encfx wavenc \
-	crc test-crc test-external-dsp check-external-dsp
+	crc test-crc test-external-dsp check-external-dsp test-decoder-only
 
 all: archive
 
@@ -238,6 +238,9 @@ $(BUILD)/test_fx_analysis $(BUILD)/test_fx_pitch $(BUILD)/test_fx_voicing $(BUIL
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
 
+$(BUILD)/test_fx_encode_centers: tests/test_fx_encode_centers.c src/c2fx_encode.c $(BUILD)/libc2fx.a $(BUILD)/cflags.stamp
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) -Isrc $< $(BUILD)/libc2fx.a -o $@
+
 $(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_OBJS) src/c2fx_internal.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc -Isrc/dsp $< $(MODEL_OBJS) $(BUILD)/libc2fx.a -lm -o $@
@@ -245,6 +248,12 @@ $(BUILD)/test_fx_envelope: tests/test_fx_envelope.c $(BUILD)/libc2fx.a $(MODEL_O
 $(BUILD)/test_fx_decode: tests/test_fx_decode.c $(BUILD)/libc2fx.a $(MODEL_OBJS) $(HOST_DSP_OBJS) include/c2fx.h include/c2fx_types.h $(BUILD)/cflags.stamp
 	mkdir -p $(dir $@)
 	$(CC) $(MODEL_CFLAGS) $(EXTRA_CFLAGS) $(MODEL_CPPFLAGS) -Isrc $< $(MODEL_OBJS) $(BUILD)/libc2fx.a $(HOST_DSP_OBJS) -lm -o $@
+
+test-decoder-only:
+	$(MAKE) archive test-crc C2FX_NO_ENCODER=1 BUILD=build/host-decoder
+	$(NM) --defined-only build/host-decoder/libc2fx.a > build/host-decoder/defined-symbols.txt
+	@awk '$$NF ~ /^c2fx_(enc|encode|pitch|voicing|analysis|lpc_analyze)/ { print "decoder archive defines " $$NF; bad = 1 } END { exit bad }' build/host-decoder/defined-symbols.txt
+	@printf '%s\n' 'decoder-only: CRC matches and encoder symbols absent'
 
 test-external-dsp: $(BUILD)/test_fx_decode
 	$(MAKE) check-external-dsp EXTERNAL_DSP=1 BUILD=$(BUILD)-external-dsp REFERENCE_BUILD=$(BUILD)
