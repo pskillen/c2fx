@@ -45,10 +45,11 @@ uint64_t c2fx_levinson_q52(const int64_t *r, int64_t *a, int order);
 int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
                           struct c2fx_enc_scratch *s);
 
-/* Refined pitch, Q20 Hz in [50, 400]. The signed 16-bit array
- * s->work.refinement.stage.spectrum holds the complex analysis FFT
- * in c2fx_rfft512 packing, with a common per-row scale. Consume it
- * before reusing the encoder workspace for LPC or another pitch row.
+/* Refined pitch, Q20 Hz in [50, 400]. The signed 32-bit array
+ * s->work.refinement.spectrum holds the complex analysis FFT
+ * in c2fx_rfft512 packing, with a common per-row scale and phase
+ * origin at the window center. Use a centered window DTFT for voicing.
+ * LPC leaves the spectrum intact. The next pitch row overwrites it.
  */
 int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
                       struct c2fx_enc_scratch *s);

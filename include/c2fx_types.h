@@ -86,6 +86,11 @@ struct c2fx_dec_scratch {
 #define C2FX_PITCH_BEFORE 260
 #define C2FX_PITCH_AFTER 160
 #define C2FX_PITCH_SPAN (C2FX_PITCH_BEFORE + C2FX_PITCH_AFTER)
+#define C2FX_PITCH_MAX_LAG 160
+#define C2FX_PITCH_POWER_BINS 385
+/* Original FFT grid, including the interpolation filter's guard bins. */
+#define C2FX_PITCH_GRID_GUARD 8
+#define C2FX_PITCH_GRID_LAST 104
 
 /* LPC and pitch use the workspace sequentially. */
 struct c2fx_enc_scratch {
@@ -97,7 +102,10 @@ struct c2fx_enc_scratch {
             int64_t poly[C2FX_LSP_ORDER / 2 + 1];
         } lpc;
         struct {
-            int32_t fft[C2FX_DFT];
+            union {
+                int32_t fft[C2FX_DFT];
+                int64_t energy_by_lag[C2FX_PITCH_MAX_LAG + 1];
+            } transform;
             int32_t notch[367];
             union {
                 int64_t fir[64];
@@ -105,18 +113,12 @@ struct c2fx_enc_scratch {
             } stage;
         } coarse;
         struct {
-            int32_t fft[C2FX_DFT];
+            int32_t power[C2FX_PITCH_POWER_BINS];
             union {
-                int32_t input[70];
-                int16_t packed[C2FX_DFT];
-            } phase[3];
-            union {
-                struct {
-                    int32_t input[70];
-                    int32_t sine[129];
-                } fft;
-                int16_t spectrum[C2FX_DFT];
-            } stage;
+                int32_t hann[C2FX_ANALYSIS_CENTER + 1];
+                int32_t grid[4 * (C2FX_PITCH_GRID_GUARD + C2FX_PITCH_GRID_LAST) + 2];
+            } interp;
+            int32_t spectrum[C2FX_DFT];
         } refinement;
     } work;
 };

@@ -103,22 +103,8 @@ static void fft_sines(int32_t sine[129])
     }
 }
 
-static void sparse_cfft(const int32_t input[70], int32_t *fft, const int32_t *sine)
+static void finish_cfft(int32_t *fft, const int32_t *sine)
 {
-    /* The first radix-4 stage follows base-4 digit reversal. Each group
-     * has at most one nonzero complex input, so its four outputs are
-     * copies. Seed those outputs directly without processing zeros.
-     */
-    for (unsigned j = 0; j < 64; j++) {
-        unsigned i = 2 * ((j & 3u) * 16 + (j & 12u) + j / 16);
-        int32_t re = i < 70 ? input[i] : 0;
-        int32_t im = i < 70 ? input[i + 1] : 0;
-
-        for (unsigned k = 0; k < 8; k += 2) {
-            fft[8 * j + k] = re;
-            fft[8 * j + k + 1] = im;
-        }
-    }
     for (int width = 8; width <= 128; width *= 4) {
         unsigned step = 128u / (unsigned)width;
 
@@ -163,11 +149,11 @@ static void sparse_cfft(const int32_t input[70], int32_t *fft, const int32_t *si
     }
 }
 
-static void sparse_rfft(const int32_t input[70], int32_t *fft, int first, const int32_t *sine)
+static void finish_rfft(int32_t *fft, int first, const int32_t *sine)
 {
     int32_t dc;
 
-    sparse_cfft(input, fft, sine);
+    finish_cfft(fft, sine);
     dc = fft[0];
     fft[0] = dc + fft[1];
     fft[1] = dc - fft[1];
@@ -184,6 +170,24 @@ static void sparse_rfft(const int32_t input[70], int32_t *fft, int first, const 
         if (p != q) {
             q[0] = sr - t.re;
             q[1] = t.im - si;
+        }
+    }
+}
+
+static void seed_sparse_cfft(const int32_t input[70], int32_t *fft)
+{
+    /* The first radix-4 stage follows base-4 digit reversal. Each group
+     * has at most one nonzero complex input, so its four outputs are
+     * copies. Seed those outputs directly without processing zeros.
+     */
+    for (unsigned j = 0; j < 64; j++) {
+        unsigned i = 2 * ((j & 3u) * 16 + (j & 12u) + j / 16);
+        int32_t re = i < 70 ? input[i] : 0;
+        int32_t im = i < 70 ? input[i + 1] : 0;
+
+        for (unsigned k = 0; k < 8; k += 2) {
+            fft[8 * j + k] = re;
+            fft[8 * j + k + 1] = im;
         }
     }
 }
@@ -219,13 +223,13 @@ static uint32_t abs32(int32_t x)
 static void coarse_spectrum(const int16_t *x, struct c2fx_enc_scratch *s)
 {
     int32_t *notch = s->work.coarse.notch + LP_TAPS - 1;
-    int32_t *fft = s->work.coarse.fft;
+    int32_t *fft = s->work.coarse.transform.fft;
     int64_t *fir = s->work.coarse.stage.fir;
     uint64_t fir_peak = 0;
     uint32_t peak = 0;
     int32_t prev_sq = 0;
     int32_t prev_y = 0;
-    int32_t gain;
+    int gain_shift;
     int shift;
 
     for (int i = 0; i < PITCH_BLOCK; i++) {
@@ -235,14 +239,13 @@ static void coarse_spectrum(const int16_t *x, struct c2fx_enc_scratch *s)
      * symmetric FIR pairs. The notch subtracts a weighted mean of past
      * squares from the current square.
      */
-    gain = peak == 0 || peak >= 32768 ? 1 : 1 << (2 * (c2fx_clz32(peak) - 17));
+    gain_shift = peak == 0 || peak >= 32768 ? 0 : 2 * (c2fx_clz32(peak) - 17);
     for (int i = 1 - LP_TAPS; i < 0; i++) {
         notch[i] = 0;
     }
     for (int i = 0; i < PITCH_BLOCK; i++) {
-        int32_t sq = x[i] * x[i] * gain;
+        int32_t sq = (x[i] * x[i] << gain_shift) >> 1;
 
-        sq >>= 1;
         prev_y = sq - prev_sq + (int32_t)c2fx_mulshr_round(prev_y, NOTCH_POLE, 30);
         notch[i] = prev_y;
         prev_sq = sq;
@@ -275,7 +278,8 @@ static void coarse_spectrum(const int16_t *x, struct c2fx_enc_scratch *s)
         notch[j] = 0;
     }
     fft_sines(notch + 70);
-    sparse_rfft(notch, fft, BIN_MIN - 1, notch + 70);
+    seed_sparse_cfft(notch, fft);
+    finish_rfft(fft, BIN_MIN - 1, notch + 70);
     peak = 0;
     for (int i = 2 * (BIN_MIN - 1); i < 2 * (BIN_MAX + 2); i++) {
         peak |= abs32(fft[i]);
@@ -322,12 +326,33 @@ static int32_t unit_fraction(int32_t num, int32_t den, unsigned bits)
     return (num < 0) != (den < 0) ? -(int32_t)q : (int32_t)q;
 }
 
-static int32_t period_corr(const int16_t *x, int bin)
+/* The reference window is common to every lag. Keep its energy at
+ * lag zero and roll the same 200-sample window backward once per row.
+ */
+static void period_energies(const int16_t *x, int64_t *energy)
+{
+    int64_t sum = 0;
+
+    for (int j = 0; j < 2 * CORR_HALF; j++) {
+        sum = c2fx_mac32(sum, x[j], x[j]);
+    }
+    energy[0] = sum;
+    for (int lag = 1; lag <= C2FX_PITCH_MAX_LAG; lag++) {
+        int32_t enter = x[-lag];
+        int32_t leave = x[2 * CORR_HALF - lag];
+
+        sum = c2fx_mac32(sum, enter, enter);
+        sum = c2fx_mac32(sum, -leave, leave);
+        energy[lag] = sum;
+    }
+}
+
+static int32_t period_corr(const int16_t *x, int bin, const int64_t *energy_by_lag)
 {
     int lag = (5120 + bin) / (2 * bin); /* round(2560 / bin) */
     int64_t ab = 0;
-    int64_t aa = 0;
-    int64_t bb = 0;
+    int64_t aa = energy_by_lag[0];
+    int64_t bb = energy_by_lag[lag];
     uint64_t largest;
     uint32_t energy;
     int shift;
@@ -337,8 +362,6 @@ static int32_t period_corr(const int16_t *x, int bin)
         int32_t v = x[j - lag];
 
         ab = c2fx_mac32(ab, u, v);
-        aa = c2fx_mac32(aa, u, u);
-        bb = c2fx_mac32(bb, v, v);
     }
     largest = (uint64_t)(aa | bb) | 1u;
     shift = 34 - c2fx_clz64(largest);
@@ -370,6 +393,7 @@ int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
 {
     const uint32_t *power = s->work.coarse.stage.power;
     const int16_t *corr = x + C2FX_PITCH_BEFORE - CORR_HALF;
+    int64_t *energy_by_lag = s->work.coarse.transform.energy_by_lag;
     int best = BIN_MIN;
     int chosen;
     int32_t peak_corr = 2048; /* Outside the Q10 correlation range. */
@@ -402,9 +426,10 @@ int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
         if (ck < chosen && local_peak(power, ck) &&
             ratio_pass(power[ck], power[best], candidate_ratio(ck, prev_hz_q20))) {
             if (peak_corr == 2048) {
-                peak_corr = period_corr(corr, best);
+                period_energies(corr, energy_by_lag);
+                peak_corr = period_corr(corr, best, energy_by_lag);
             }
-            if (period_corr(corr, ck) >= peak_corr - 614) { /* -0.6 in Q10 */
+            if (period_corr(corr, ck, energy_by_lag) >= peak_corr - 614) { /* -0.6 in Q10 */
                 chosen = ck;
             }
         }
@@ -430,162 +455,116 @@ int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
 }
 
 #define HS_STEPS 12
-#define HS_BIN_MAX 384
+#define HS_BIN_MAX (C2FX_PITCH_POWER_BINS - 1)
 #define HS_BIN_ONE (UINT32_C(1) << 20)
 
-/* A positive phase bin q and its mirror 512-q use the two words
- * of phase FFT bin q after it is consumed. DC and bin 256 use words 0,1.
+/* Half-sample interpolation of the centered complex spectrum.
+ * Symmetric Q15 taps fit unity gain by least squares over [0, 139/N]
+ * cycles per bin, for N = 512 and 1024 respectively.
  */
-static uint32_t power_slot(unsigned bin)
+static const int16_t midpoint_512[] = {20385, -5639, 2307, -901, 294, -70, 9};
+static const int16_t midpoint_1024[] = {19717, -4137, 911, -108};
+
+static struct pitch_complex midpoint(const int32_t *left, int stride,
+                                     const int16_t *tap, int pairs)
 {
-    if (bin == C2FX_DFT / 2) {
-        return 1;
+    int64_t re = 16384;
+    int64_t im = 16384;
+
+    for (int i = 0; i < pairs; i++) {
+        const int32_t *a = left - i * stride;
+        const int32_t *b = left + (i + 1) * stride;
+
+        re = c2fx_mac32(re, a[0] + b[0], tap[i]);
+        im = c2fx_mac32(im, a[1] + b[1], tap[i]);
     }
-    return bin < C2FX_DFT / 2 ? 2 * bin : 2 * (C2FX_DFT - bin) + 1;
-}
+    {
+        struct pitch_complex result = {(int32_t)(re >> 15), (int32_t)(im >> 15)};
 
-static void emit_bin(int32_t *fft, int16_t *spec, unsigned k, int32_t re, int32_t im)
-{
-    if (k <= HS_BIN_MAX) {
-        fft[power_slot(k)] = (int32_t)(((int64_t)re * re + (int64_t)im * im) >> 8);
-    }
-    if (k % 4 == 0) {
-        spec[k / 2] = (int16_t)(re >> 4);
-        spec[k / 2 + 1] = (int16_t)(im >> 4);
+        return result;
     }
 }
 
-/* Phase components use a signed 14-bit mantissa and a two-bit power
- * of four. Quiet bins retain all bits of the common 20-bit FFT scale.
- */
-static int16_t pack_phase(int32_t x)
+static int32_t window_sample(const int16_t *x, const int32_t *hann, unsigned i, int shift)
 {
-    unsigned bits = 32 - (unsigned)c2fx_clz32(abs32(x) | 1u);
-    unsigned shift = bits > 13 ? (bits - 12) & ~1u : 0;
+    if (i >= C2FX_ANALYSIS_LEN) {
+        return 0;
+    }
+    unsigned j = i <= C2FX_ANALYSIS_CENTER ? i : C2FX_ANALYSIS_LEN - 1 - i;
 
-    return (int16_t)((x >> shift) * 4 + (int32_t)(shift / 2));
+    return (int32_t)(((int64_t)x[i] * hann[j]) >> shift);
 }
-
-static int32_t unpack_phase(int16_t packed)
-{
-    return (packed >> 2) * (1 << (2 * (packed & 3)));
-}
-
-/* cos and -sin at one step of each of the 2048-point phase shifts. */
-static const struct pitch_complex first_phase[3] = {
-    {1073736771, -3294193},
-    {1073721611, -6588356},
-    {1073696345, -9882456}
-};
-static const int32_t phase_pole[3] = {1293628, 5174499, 11642577};
 
 static void analysis_power(const int16_t *x, struct c2fx_enc_scratch *s)
 {
-    int32_t *fft = s->work.refinement.fft;
-
-    int16_t *spec = s->work.refinement.stage.spectrum;
+    int32_t *fft = s->work.refinement.spectrum;
+    int32_t *power = s->work.refinement.power;
+    int32_t *grid = s->work.refinement.interp.grid + 4 * C2FX_PITCH_GRID_GUARD;
+    int32_t *hann = s->work.refinement.interp.hann;
     uint64_t sum = 0;
     int shift;
-    int32_t dc[4];
-    int32_t nyquist;
-    struct pitch_complex wave[3];
-    struct pitch_complex delta[3];
 
-    /* Polyphase decomposition: x[4n+t] gives a 512-point transform
-     * for each t. At k=q+512m, rotate each phase by exp(-2 pi i q t/2048)
-     * then take bin m of their four-point DFT. Real input symmetry
-     * supplies the mirrored bins. Construction needs only one FFT at
-     * a time, and emits all 385 low powers plus the residue-0 spectrum.
-     */
-    c2fx_hann_q38(fft);
+    c2fx_hann_q38(hann);
     for (int i = 0; i < C2FX_ANALYSIS_CENTER; i++) {
         int mirror = C2FX_ANALYSIS_LEN - 1 - i;
         uint32_t pair = abs32(x[i]) + abs32(x[mirror]);
 
-        sum += c2fx_umul32(pair, (uint32_t)fft[i]);
+        sum += c2fx_umul32(pair, (uint32_t)hann[i]);
     }
-    sum += c2fx_umul32(abs32(x[C2FX_ANALYSIS_CENTER]), (uint32_t)fft[C2FX_ANALYSIS_CENTER]);
-    /* Scale the entire row by its windowed L1 norm so quiet partial
-     * windows and full-scale rows both use the available FFT precision.
-     * Limit L1 below 2^29 and reserve room for phase-packing and twiddle
-     * rounding before writing the 16-bit retained spectrum.
+    sum += c2fx_umul32(abs32(x[C2FX_ANALYSIS_CENTER]), (uint32_t)hann[C2FX_ANALYSIS_CENTER]);
+    /* As in the coarse path, reserve room for FFT pair sums. Here the
+     * bound is on windowed L1, so it also bounds the final components.
      */
     shift = sum == 0 ? 0 : 35 - c2fx_clz64(sum + (sum >> 9));
     if (shift < 0) {
         shift = 0;
     }
-    for (int t = 0; t < 4; t++) {
-        int32_t *input = t < 3 ? s->work.refinement.phase[t].input : s->work.refinement.stage.fft.input;
-        int n = 0;
+    /* Circularly center the real input before the FFT. A centered
+     * window DTFT uses the same origin for the subsequent voicing fit.
+     */
+    for (unsigned j = 0; j < 64; j++) {
+        unsigned sample = 2 * ((j & 3u) * 16 + (j & 12u) + j / 16) + C2FX_ANALYSIS_CENTER;
+        int32_t *p = fft + 8 * j;
 
-        for (int i = t; i < C2FX_ANALYSIS_LEN; i += 4) {
-            int k = i <= C2FX_ANALYSIS_CENTER ? i : C2FX_ANALYSIS_LEN - 1 - i;
-
-            input[n++] = (int32_t)(((int64_t)x[i] * fft[k]) >> shift);
-        }
-        if (t == 3) {
-            input[69] = 0;
-        }
-    }
-    fft_sines(s->work.refinement.stage.fft.sine);
-    for (int t = 0; t < 4; t++) {
-        const int32_t *input = t < 3 ? s->work.refinement.phase[t].input : s->work.refinement.stage.fft.input;
-
-        sparse_rfft(input, fft, 1, s->work.refinement.stage.fft.sine);
-        dc[t] = (fft[0] + 512) >> 10;
-        if (t < 3) {
-            for (int i = 1; i < C2FX_DFT; i++) {
-                s->work.refinement.phase[t].packed[i] = pack_phase((fft[i] + 512) >> 10);
-            }
-        }
-    }
-    nyquist = (fft[1] + 512) >> 10;
-    emit_bin(fft, spec, 0, dc[0] + dc[1] + dc[2] + dc[3], 0);
-    spec[1] = (int16_t)((dc[0] - dc[1] + dc[2] - dc[3]) >> 4);
-    spec[256] = (int16_t)((dc[0] - dc[2]) >> 4);
-    spec[257] = (int16_t)((dc[3] - dc[1]) >> 4);
-
-    for (int t = 0; t < 3; t++) {
-        wave[t] = first_phase[t];
-        delta[t].re = wave[t].re - (1 << 30);
-        delta[t].im = wave[t].im;
-    }
-    for (unsigned k = 1; k <= 256; k++) {
-        unsigned i = k == 256 ? 1 : 2 * k;
-        int32_t a[8];
         for (unsigned t = 0; t < 4; t++) {
-            struct pitch_complex z;
+            unsigned i = (sample + 128 * t) & 511u;
 
-            if (t < 3) {
-                const int16_t *packed = s->work.refinement.phase[t].packed;
+            p[2 * t] = window_sample(x, hann, i, shift);
+            p[2 * t + 1] = window_sample(x, hann, (i + 1) & 511u, shift);
+        }
+        four_point(p, 2);
+    }
+    fft_sines(hann);
+    finish_rfft(fft, 1, hann);
+    grid[0] = (fft[0] + 512) >> 10;
+    grid[1] = 0;
+    for (int k = 1; k <= C2FX_PITCH_GRID_LAST; k++) {
+        grid[4 * k] = (fft[2 * k] + 512) >> 10;
+        grid[4 * k + 1] = (fft[2 * k + 1] + 512) >> 10;
+    }
+    for (int k = -C2FX_PITCH_GRID_GUARD; k < 0; k++) {
+        grid[4 * k] = grid[-4 * k];
+        grid[4 * k + 1] = -grid[-4 * k + 1];
+    }
+    /* Odd bins of the 1024 grid, including the guard bins needed by
+     * the next filter. Its edge of 139/1024 allows a shorter filter.
+     */
+    for (int k = -2; k <= HS_BIN_MAX / 4 + 1; k++) {
+        int32_t *left = grid + 4 * k;
 
-                z.re = unpack_phase(packed[i]);
-                z.im = k == 256 ? 0 : unpack_phase(packed[i + 1]);
-            } else {
-                z.re = k == 256 ? nyquist : (fft[i] + 512) >> 10;
-                z.im = k == 256 ? 0 : (fft[i + 1] + 512) >> 10;
-            }
-            if (t != 0) {
-                unsigned p = t - 1;
-                int32_t c = oscillator(&wave[p].re, &delta[p].re, phase_pole[p]);
-                int32_t ns = oscillator(&wave[p].im, &delta[p].im, phase_pole[p]);
+        struct pitch_complex z = midpoint(left, 4, midpoint_512, 7);
 
-                z = rotate(z, c, ns);
-            }
-            a[2 * t] = z.re;
-            a[2 * t + 1] = z.im;
+        left[2] = z.re;
+        left[3] = z.im;
+    }
+    for (unsigned k = 0; k <= HS_BIN_MAX; k++) {
+        const int32_t *left = grid + 2 * (k / 2);
+        struct pitch_complex z = load_pair(left);
+
+        if (k & 1) {
+            z = midpoint(left, 2, midpoint_1024, 4);
         }
-        four_point(a, 2);
-        emit_bin(fft, spec, k, a[0], a[1]);
-        if (k != 256 && (k >= 128 || k % 4 == 0)) {
-            emit_bin(fft, spec, 512 - k, a[6], -a[7]);
-        }
-        if (k % 4 == 0) {
-            emit_bin(fft, spec, 512 + k, a[2], a[3]);
-            if (k != 256) {
-                emit_bin(fft, spec, 1024 - k, a[4], -a[5]);
-            }
-        }
+        power[k] = (int32_t)(((int64_t)z.re * z.re + (int64_t)z.im * z.im) >> 8);
     }
 }
 
@@ -593,7 +572,7 @@ int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
                       struct c2fx_enc_scratch *s)
 {
     int32_t coarse = c2fx_pitch_coarse(x, prev_hz_q20, s);
-    const int32_t *power = s->work.refinement.fft;
+    const int32_t *power = s->work.refinement.power;
     int64_t best_energy = -1;
     int32_t best_hz = 0;
 
@@ -606,8 +585,8 @@ int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
         for (uint32_t bin = spacing; bin <= HS_BIN_MAX * HS_BIN_ONE; bin += spacing) {
             uint32_t k = bin >> 20;
             uint32_t frac = bin & (HS_BIN_ONE - 1);
-            int32_t left = power[power_slot(k)];
-            int32_t right = k < HS_BIN_MAX ? power[power_slot(k + 1)] : left;
+            int32_t left = power[k];
+            int32_t right = k < HS_BIN_MAX ? power[k + 1] : left;
 
             energy += (int64_t)left * HS_BIN_ONE + (int64_t)(right - left) * frac;
         }
