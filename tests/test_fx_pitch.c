@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The c2fx Authors
 
 #include "c2fx_internal.h"
+#include "tables/c2fx_window.h"
 #include "c2m_analysis.h"
 #include "c2m_pitch.h"
 #include "c2m_voicing.h"
@@ -87,6 +88,48 @@ static void print_stats(const char *path, const char *tracking, const pitch_stat
            path, tracking, rows, 100.0 * stats->identical / rows, stats->worst, stats->max_hz, stats->octaves);
 }
 
+/* Compare complex bins against the centered Q38 Hann DFT. For very weak
+ * in-band rows, 4096 FFT counts is an absolute floor on the 2% bound.
+ */
+static int check_spectrum(const int16_t *x, struct c2fx_enc_scratch *s, const char *name)
+{
+    int32_t hann[C2FX_ANALYSIS_CENTER + 1];
+    double expected_re[81], expected_im[81], peak = 0, error = 0;
+    double scale = ldexp(1.0, -c2fx_pitch_spectrum_shift(s));
+    const int32_t *spectrum = s->work.refinement.spectrum;
+    c2fx_enc_row row;
+
+    c2fx_hann_q38(hann);
+    for (int k = 0; k <= 80; k++) {
+        double re = 0, im = 0;
+        for (int i = 0; i < C2FX_ANALYSIS_LEN; i++) {
+            int j = i <= C2FX_ANALYSIS_CENTER ? i : C2FX_ANALYSIS_LEN - 1 - i;
+            double phase = 2 * C2M_PI * k * (i - C2FX_ANALYSIS_CENTER) / 512;
+            double v = x[C2FX_PITCH_BEFORE - C2FX_ANALYSIS_CENTER + i] * (double)hann[j] * scale;
+            re += v * cos(phase);
+            im -= v * sin(phase);
+        }
+        expected_re[k] = re;
+        expected_im[k] = im;
+        peak = fmax(peak, hypot(re, im));
+    }
+    for (int pass = 0; pass < 2; pass++) {
+        for (int k = 0; k <= 80; k++) {
+            double re = spectrum[2 * k];
+            double im = k ? spectrum[2 * k + 1] : 0;
+            error = fmax(error, hypot(re - expected_re[k], im - expected_im[k]));
+        }
+        if (error > fmax(4096.0, 0.02 * peak)) {
+            fprintf(stderr, "%s: spectrum DFT failed (error %.1f, peak %.1f, pass %d)\n", name, error, peak, pass);
+            return 1;
+        }
+        if (pass == 0) {
+            c2fx_lpc_analyze(x + C2FX_PITCH_BEFORE - C2FX_ANALYSIS_CENTER, &row, s);
+        }
+    }
+    return 0;
+}
+
 static int run_file(const char *path)
 {
     int n;
@@ -116,6 +159,10 @@ static int run_file(const char *path)
             x[j] = i >= 0 && i < n ? pcm[i] : 0;
         }
         fixed_with_model = c2fx_pitch_hz(x, prev_model_q20, &scratch);
+        if (check_spectrum(x, &scratch, path)) {
+            free(pcm);
+            return 1;
+        }
         fixed_with_own = prev_fixed == prev_model_q20 ? fixed_with_model : c2fx_pitch_hz(x, prev_fixed, &scratch);
         compare(&model_tracking, model, fixed_with_model);
         compare(&own_tracking, model, fixed_with_own);
@@ -159,6 +206,9 @@ static int check_edge(const char *name, const int16_t *x)
     struct c2fx_enc_scratch scratch;
     int32_t pitch = c2fx_pitch_hz(x, 0, &scratch);
 
+    if (check_spectrum(x, &scratch, name)) {
+        return 1;
+    }
     if (pitch < 50 * HZ_ONE || pitch > 400 * HZ_ONE) {
         fprintf(stderr, "%s: pitch %.6f Hz outside [50, 400]\n", name, pitch / (double)HZ_ONE);
         return 1;

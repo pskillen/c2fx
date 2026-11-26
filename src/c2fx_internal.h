@@ -47,10 +47,19 @@ int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
 
 /* Refined pitch, Q20 Hz in [50, 400]. The signed 32-bit array
  * s->work.refinement.spectrum holds the complex analysis FFT
- * in c2fx_rfft512 packing, with a common per-row scale and phase
- * origin at the window center. Use a centered window DTFT for voicing.
- * LPC leaves the spectrum intact. The next pitch row overwrites it.
+ * in c2fx_rfft512 packing, with origin at the window center. Relative to
+ * model/c2m_voicing.c bin k, multiply by exp(+j*2*pi*k*139/512).
+ * The input is x times the Q38 Hann table divided by 2^spectrum_shift;
+ * window products are rounded. LPC leaves spectrum and shift intact,
+ * and 3340 bytes below the spectrum are free while it lives. Another pitch
+ * row overwrites both. Bins 0..80 have complex error at most 2% of the
+ * in-band peak, except rows with tiny in-band energy (see the test).
  */
+static inline int c2fx_pitch_spectrum_shift(const struct c2fx_enc_scratch *s)
+{
+    return s->work.refinement.spectrum_shift;
+}
+
 int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
                       struct c2fx_enc_scratch *s);
 

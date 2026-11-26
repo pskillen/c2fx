@@ -119,6 +119,7 @@ struct c2fx_enc_scratch {
                 int32_t grid[4 * (C2FX_PITCH_GRID_GUARD + C2FX_PITCH_GRID_LAST) + 2];
             } interp;
             int32_t spectrum[C2FX_DFT];
+            int spectrum_shift;
         } refinement;
     } work;
 };

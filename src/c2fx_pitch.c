@@ -378,7 +378,7 @@ static int32_t candidate_ratio(int bin, int32_t prev)
     int32_t ratio = 9011; /* 0.55 in Q14 */
 
     if (bin < 32) {
-        ratio = (7717 * 16 + 1311 * (bin - BIN_MIN) + 8) / 16;
+        ratio = (7700 * 16 + 1311 * (bin - BIN_MIN) + 8) / 16;
     }
     if (5 * hz > 4u * (uint32_t)prev && 5 * hz < 6u * (uint32_t)prev) {
         ratio = 6390; /* 0.39 */
@@ -492,7 +492,9 @@ static int32_t window_sample(const int16_t *x, const int32_t *hann, unsigned i, 
     }
     unsigned j = i <= C2FX_ANALYSIS_CENTER ? i : C2FX_ANALYSIS_LEN - 1 - i;
 
-    return (int32_t)(((int64_t)x[i] * hann[j]) >> shift);
+    int64_t product = (int64_t)x[i] * hann[j];
+
+    return (int32_t)((product + (shift ? INT64_C(1) << (shift - 1) : 0)) >> shift);
 }
 
 static void analysis_power(const int16_t *x, struct c2fx_enc_scratch *s)
@@ -519,6 +521,7 @@ static void analysis_power(const int16_t *x, struct c2fx_enc_scratch *s)
     if (shift < 0) {
         shift = 0;
     }
+    s->work.refinement.spectrum_shift = shift;
     /* Circularly center the real input before the FFT. A centered
      * window DTFT uses the same origin for the subsequent voicing fit.
      */
