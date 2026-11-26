@@ -36,6 +36,34 @@ void c2fx_lpc_analyze(const int16_t x[C2FX_ANALYSIS_LEN],
  */
 uint64_t c2fx_levinson_q52(const int64_t *r, int64_t *a, int order);
 
+/* Pitch input spans center - 260 through center + 159, zero-padded by
+ * the caller. The notch block spans [-160, 159], the period check uses
+ * [-100, 99] at lags up to 160, and the analysis window spans [-139, 139].
+ * Previous pitch is Q20 Hz, or zero when there is no voiced predecessor.
+ * Coarse pitch is Q20 Hz before the final range clamp.
+ */
+int32_t c2fx_pitch_coarse(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
+                          struct c2fx_enc_scratch *s);
+
+/* Refined pitch, Q20 Hz in [50, 400]. The signed 32-bit array
+ * s->work.refinement.spectrum holds the complex analysis FFT
+ * in c2fx_rfft512 packing, with origin at the window center: retained
+ * bin k = model/c2m_voicing.c bin k * exp(+j*2*pi*k*139/512).
+ * The input is x times the Q38 Hann table divided by 2^spectrum_shift;
+ * window products are rounded. LPC leaves spectrum and shift intact,
+ * and 3340 bytes below the spectrum are free while it lives. Another pitch
+ * row overwrites both. Bins 0..80 have complex error at most
+ * max(96 counts, 0.005% of the in-band peak); measured worst 0.0031%.
+ */
+static inline int c2fx_pitch_spectrum_shift(const struct c2fx_enc_scratch *s)
+{
+    return s->work.refinement.spectrum_shift;
+}
+
+int32_t c2fx_pitch_hz(const int16_t x[C2FX_PITCH_SPAN], int32_t prev_hz_q20,
+                      struct c2fx_enc_scratch *s);
+
+int c2fx_quant_w0_index(int32_t hz_q20);
 int c2fx_quant_energy_index(const c2fx_enc_row *row);
 void c2fx_quant_lsp_indices(const c2fx_enc_row *row, int d[C2FX_LSP_ORDER]);
 

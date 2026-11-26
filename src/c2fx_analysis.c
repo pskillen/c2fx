@@ -43,28 +43,28 @@ static int autocorrelation(const int16_t *x, struct c2fx_enc_scratch *s)
         }
     }
     if (peak == 0) {
-        s->r[0] = 0;
+        s->work.lpc.r[0] = 0;
         return 0;
     }
     /* The top bit goes to bit 14. INT16_MIN already fills the range. */
     boost = peak == 32768u ? 0 : c2fx_clz32(peak) - 17;
     gain = 1 << boost;
 
-    s->windowed[0] = 0;
-    s->windowed[C2FX_ANALYSIS_LEN - 1] = 0;
+    c2fx_hann_q38(s->work.lpc.windowed);
+    s->work.lpc.windowed[C2FX_ANALYSIS_LEN - 1] = 0;
     for (int i = 1; i < C2FX_ANALYSIS_CENTER; i++) {
         int mirror = C2FX_ANALYSIS_LEN - 1 - i;
-        int32_t tap = c2fx_hann_q38[i];
+        int32_t tap = s->work.lpc.windowed[i];
 
-        s->windowed[i] = (int32_t)c2fx_mulshr_round(x[i] * gain, tap, 38 - WINDOW_Q);
-        s->windowed[mirror] = (int32_t)c2fx_mulshr_round(x[mirror] * gain, tap, 38 - WINDOW_Q);
+        s->work.lpc.windowed[i] = (int32_t)c2fx_mulshr_round(x[i] * gain, tap, 38 - WINDOW_Q);
+        s->work.lpc.windowed[mirror] = (int32_t)c2fx_mulshr_round(x[mirror] * gain, tap, 38 - WINDOW_Q);
     }
-    s->windowed[C2FX_ANALYSIS_CENTER] = (int32_t)c2fx_mulshr_round(
-        x[C2FX_ANALYSIS_CENTER] * gain, c2fx_hann_q38[C2FX_ANALYSIS_CENTER], 38 - WINDOW_Q);
+    s->work.lpc.windowed[C2FX_ANALYSIS_CENTER] = (int32_t)c2fx_mulshr_round(
+        x[C2FX_ANALYSIS_CENTER] * gain, s->work.lpc.windowed[C2FX_ANALYSIS_CENTER], 38 - WINDOW_Q);
 
     for (int k = 0; k <= C2FX_LSP_ORDER; k++) {
         int64_t sum = 0;
-        const int32_t *left = s->windowed;
+        const int32_t *left = s->work.lpc.windowed;
         const int32_t *right = left + k;
         const int32_t *end = left + C2FX_ANALYSIS_LEN - k;
         const int32_t *block_end = left + ((C2FX_ANALYSIS_LEN - k) & ~3);
@@ -79,22 +79,22 @@ static int autocorrelation(const int16_t *x, struct c2fx_enc_scratch *s)
         for (; left != end; left++, right++) {
             sum = c2fx_mac32(sum, *left, *right);
         }
-        s->r[k] = sum;
+        s->work.lpc.r[k] = sum;
     }
     /* The boosted peak and every interior Hann tap are large enough
      * that r[0] is nonzero. Put its high bit at CORR_BIT to leave headroom
      * for the LPC sum. Each lag is the stored value times 2^(shift-40-2*boost).
      */
-    int shift = 63 - c2fx_clz64((uint64_t)s->r[0]) - CORR_BIT;
+    int shift = 63 - c2fx_clz64((uint64_t)s->work.lpc.r[0]) - CORR_BIT;
     for (int k = 0; k <= C2FX_LSP_ORDER; k++) {
         if (shift > 0) {
-            s->r[k] >>= shift;
+            s->work.lpc.r[k] >>= shift;
         } else {
-            s->r[k] *= INT64_C(1) << -shift;
+            s->work.lpc.r[k] *= INT64_C(1) << -shift;
         }
     }
     /* White-noise correction, 2e-7 in Q52. */
-    s->r[0] = c2fx_add64(s->r[0], c2fx_mulshr64(s->r[0], WHITE_NOISE, LPC_Q));
+    s->work.lpc.r[0] = c2fx_add64(s->work.lpc.r[0], c2fx_mulshr64(s->work.lpc.r[0], WHITE_NOISE, LPC_Q));
     return shift - 2 * (WINDOW_Q + boost);
 }
 
@@ -208,7 +208,7 @@ static void split_polynomial(const int64_t *a, int sign, int64_t *poly)
 /* round(2^30 * cos(pi * i / 128)), i = 0..128. The first
  * quadrant also supplies the sine slopes for interpolation.
  */
-static const int32_t grid_cos_q30[LSP_GRID + 1] = {
+static const int32_t grid_cos_q30[LSP_GRID / 2 + 1] = {
     1073741824, 1073418433, 1072448455, 1070832474, 1068571464, 1065666786,
     1062120190, 1057933813, 1053110176, 1047652185, 1041563127, 1034846671,
     1027506862, 1019548121, 1010975242, 1001793390, 992008094, 981625251,
@@ -219,19 +219,13 @@ static const int32_t grid_cos_q30[LSP_GRID + 1] = {
     552013618, 529245404, 506158392, 482766489, 459083786, 435124548,
     410903207, 386434353, 361732726, 336813204, 311690799, 286380643,
     260897982, 235258165, 209476638, 183568930, 157550647, 131437462,
-    105245103, 78989349, 52686014, 26350943, 0, -26350943,
-    -52686014, -78989349, -105245103, -131437462, -157550647, -183568930,
-    -209476638, -235258165, -260897982, -286380643, -311690799, -336813204,
-    -361732726, -386434353, -410903207, -435124548, -459083786, -482766489,
-    -506158392, -529245404, -552013618, -574449320, -596538995, -618269338,
-    -639627258, -660599890, -681174602, -701339000, -721080937, -740388522,
-    -759250125, -777654384, -795590213, -813046808, -830013654, -846480531,
-    -862437520, -877875009, -892783698, -907154608, -920979082, -934248793,
-    -946955747, -959092290, -970651112, -981625251, -992008094, -1001793390,
-    -1010975242, -1019548121, -1027506862, -1034846671, -1041563127, -1047652185,
-    -1053110176, -1057933813, -1062120190, -1065666786, -1068571464, -1070832474,
-    -1072448455, -1073418433, -1073741824,
+    105245103, 78989349, 52686014, 26350943, 0,
 };
+
+static int32_t grid_cos(int i)
+{
+    return i <= LSP_GRID / 2 ? grid_cos_q30[i] : -grid_cos_q30[LSP_GRID - i];
+}
 
 static int32_t grid_slope(int i)
 {
@@ -284,8 +278,8 @@ typedef struct cosine_cell {
 
 static cosine_cell make_cell(int i)
 {
-    int32_t left = grid_cos_q30[i];
-    int32_t delta = grid_cos_q30[i + 1] - left;
+    int32_t left = grid_cos(i);
+    int32_t delta = grid_cos(i + 1) - left;
     int32_t d0 = grid_slope(i);
     int32_t d1 = grid_slope(i + 1);
 
@@ -353,7 +347,7 @@ static int find_roots(const int32_t *p, const int32_t *q, int32_t *hz)
     for (int i = 0; i < LSP_GRID; i++) {
         int32_t lo = i == 0 ? GRID_MARGIN : 0;
         int32_t hi = GRID_ONE;
-        int32_t x = grid_cos_q30[i + 1];
+        int32_t x = grid_cos(i + 1);
 
         if (i == LSP_GRID - 1) {
             cosine_cell last = make_cell(i);
@@ -397,13 +391,13 @@ static void lpc_to_lsp(c2fx_enc_row *row, struct c2fx_enc_scratch *s)
     int32_t q[LSP_HALF_ORDER + 1];
 
     for (int k = 1; k <= C2FX_LSP_ORDER; k++) {
-        s->a[k] = c2fx_mulshr64(s->a[k], bandwidth_q30[k - 1], 30);
+        s->work.lpc.a[k] = c2fx_mulshr64(s->work.lpc.a[k], bandwidth_q30[k - 1], 30);
     }
 
-    split_polynomial(s->a, 1, s->poly);
-    normalize_polynomial(s->poly, p);
-    split_polynomial(s->a, -1, s->poly);
-    normalize_polynomial(s->poly, q);
+    split_polynomial(s->work.lpc.a, 1, s->work.lpc.poly);
+    normalize_polynomial(s->work.lpc.poly, p);
+    split_polynomial(s->work.lpc.a, -1, s->work.lpc.poly);
+    normalize_polynomial(s->work.lpc.poly, q);
     if (!find_roots(p, q, row->lsp_hz_q16)) {
         flat_lsps(row, 1, C2FX_LSP_ORDER + 1);
     }
@@ -415,15 +409,15 @@ void c2fx_lpc_analyze(const int16_t x[C2FX_ANALYSIS_LEN],
     int exponent = autocorrelation(x, s);
     uint64_t energy;
 
-    if (s->r[0] == 0) {
+    if (s->work.lpc.r[0] == 0) {
         row->energy_log2_q24 = INT32_MIN;
         flat_lsps(row, 0, C2FX_LSP_ORDER);
         return;
     }
     for (int j = 1; j <= C2FX_LSP_ORDER; j++) {
-        s->a[j] = 0;
+        s->work.lpc.a[j] = 0;
     }
-    energy = c2fx_levinson_q52(s->r, s->a, C2FX_LSP_ORDER);
+    energy = c2fx_levinson_q52(s->work.lpc.r, s->work.lpc.a, C2FX_LSP_ORDER);
     row->energy_log2_q24 = energy == 0 ? INT32_MIN : energy_log2(energy, exponent);
     lpc_to_lsp(row, s);
 }

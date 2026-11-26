@@ -222,6 +222,41 @@ static int edge_rows(void)
     return failed;
 }
 
+static int end_search_cell(int tone_hz, int *in_cell)
+{
+    int16_t x[C2FX_ANALYSIS_LEN];
+    struct c2fx_enc_scratch scratch;
+    c2fx_enc_row row;
+    double energy;
+    double model_lsp[C2FX_LSP_ORDER];
+    uint32_t rng = UINT32_C(0xC2F32001);
+    int failed = 0;
+
+    for (int j = 0; j < C2FX_ANALYSIS_LEN; j++) {
+        int centered = j - C2FX_ANALYSIS_CENTER;
+        double phase = 2.0 * C2M_PI * tone_hz * centered / C2M_FS_HZ;
+
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        x[j] = (int16_t)lround(27000.0 * cos(phase) + (int)(rng % 541) - 270);
+    }
+    c2fx_lpc_analyze(x, &row, &scratch);
+    c2m_lpc_analyze(x, C2FX_ANALYSIS_LEN, C2FX_ANALYSIS_CENTER, &energy, model_lsp);
+    for (int j = 0; j < C2FX_LSP_ORDER; j++) {
+        double fixed = row.lsp_hz_q16[j] / (double)HZ_ONE;
+        double model = model_lsp[j] * C2M_FS_HZ / (2.0 * C2M_PI);
+
+        if (fabs(fixed - model) > 0.3) {
+            fprintf(stderr, "%d Hz tone: LSP %d fixed %.6f Hz, model %.6f Hz exceeds 0.3 Hz bar\n",
+                    tone_hz, j, fixed, model);
+            failed = 1;
+        }
+        *in_cell |= tone_hz < 32 ? fixed < 31.25 : fixed > 3968.75;
+    }
+    return failed;
+}
+
 static int hann_symmetry(void)
 {
     int16_t x[C2FX_ANALYSIS_LEN];
@@ -235,9 +270,9 @@ static int hann_symmetry(void)
     for (int j = 0; j < C2FX_ANALYSIS_CENTER; j++) {
         int mirror = C2FX_ANALYSIS_LEN - 1 - j;
 
-        if (scratch.windowed[j] != scratch.windowed[mirror]) {
+        if (scratch.work.lpc.windowed[j] != scratch.work.lpc.windowed[mirror]) {
             fprintf(stderr, "Hann symmetry: x[%d] and x[%d] window to %d and %d\n",
-                    j, mirror, scratch.windowed[j], scratch.windowed[mirror]);
+                    j, mirror, scratch.work.lpc.windowed[j], scratch.work.lpc.windowed[mirror]);
             return 1;
         }
     }
@@ -307,14 +342,28 @@ int main(void)
 {
     analysis_stats pooled = {0};
     int failed = quantizer_boundaries();
+    int first_cell = 0;
+    int last_cell = 0;
 
     failed |= edge_rows();
+    failed |= end_search_cell(1, &first_cell);
+    failed |= end_search_cell(3900, &last_cell);
+    failed |= end_search_cell(3950, &last_cell);
+    failed |= end_search_cell(3999, &last_cell);
+    if (!first_cell || !last_cell) {
+        fprintf(stderr, "edge tones: first cell covered %d, last cell covered %d\n", first_cell, last_cell);
+        failed = 1;
+    }
     failed |= hann_symmetry();
     failed |= reflection_cap();
     failed |= run_group("tests/data/voice/*.pcm", &pooled);
     failed |= run_group("tests/data/signals/*.pcm", &pooled);
     if (pooled.rows != 0) {
         print_stats("pooled", &pooled);
+        if (pooled.lsp_hz > 0.12) {
+            fprintf(stderr, "pooled LSP error %.7f Hz exceeds 0.12 Hz bar\n", pooled.lsp_hz);
+            failed = 1;
+        }
     }
     printf("encoder scratch %zu bytes, scratch union %zu bytes\n",
            sizeof(struct c2fx_enc_scratch), sizeof(c2fx_scratch_t));
