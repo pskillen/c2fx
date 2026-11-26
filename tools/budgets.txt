@@ -13,12 +13,16 @@ arm.decoder_objs = dsp/c2fx_fft.o dsp/c2fx_math.o dsp/c2fx_tables.o dsp/c2fx_exp
 arm.encoder_objs = c2fx_analysis.o tables/c2fx_window.o c2fx_pitch.o c2fx_voicing.o c2fx_encode.o
 
 # DM-32UV
+# DM-32UV (total raised from 16,384 to 20,480 B on 2026-11-26 for the encoder: owner and the M17 coordinator agreed;
+# the radio has about 125 KB free; the decoder stays within its 9,216 B)
 csky.radio = DM-32UV
-csky.total = 16384
-csky.decoder_objs =
-csky.encoder_objs =
+csky.total = 20480
+csky.decoder = 9216
+csky.decoder_objs = dsp/c2fx_fft.o dsp/c2fx_math.o dsp/c2fx_tables.o dsp/c2fx_exp2_tab.o tables/c2_3200_tab.o c2fx_frame.o c2fx_quant.o c2fx_lpc.o c2fx_envelope.o c2fx_phase.o c2fx_synth.o c2fx_lost.o c2fx_decode.o
+csky.encoder_objs = c2fx_analysis.o tables/c2fx_window.o c2fx_pitch.o c2fx_voicing.o c2fx_encode.o
 
 csky-dsp.radio = DM-32UV
-csky-dsp.total = 16384
-csky-dsp.decoder_objs =
-csky-dsp.encoder_objs =
+csky-dsp.total = 20480
+csky-dsp.decoder = 9216
+csky-dsp.decoder_objs = dsp/c2fx_fft.o dsp/c2fx_math.o dsp/c2fx_tables.o dsp/c2fx_exp2_tab.o tables/c2_3200_tab.o c2fx_frame.o c2fx_quant.o c2fx_lpc.o c2fx_envelope.o c2fx_phase.o c2fx_synth.o c2fx_lost.o c2fx_decode.o
+csky-dsp.encoder_objs = c2fx_analysis.o tables/c2fx_window.o c2fx_pitch.o c2fx_voicing.o c2fx_encode.o
