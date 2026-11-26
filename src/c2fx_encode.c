@@ -9,13 +9,7 @@
 
 void c2fx_enc_init(c2fx_enc_t *e)
 {
-    for (int j = 0; j < HISTORY; j++) {
-        e->pcm[j] = 0;
-    }
-    e->ready = 0;
-    e->even_base = 0;
-    e->pending.v_b = 0;
-    e->prev_hz_q20 = 0;
+    *e = (c2fx_enc_t){0};
 }
 
 static int32_t analyze_voicing(c2fx_enc_t *e, const int16_t *x,
@@ -31,10 +25,9 @@ static int32_t analyze_voicing(c2fx_enc_t *e, const int16_t *x,
 }
 
 void c2fx_encode(c2fx_enc_t *e, const int16_t pcm[C2FX_FRAME_LEN],
-                 uint8_t bits[C2FX_BITS_BYTES], void *scratch)
+                 uint8_t bits[C2FX_BITS_BYTES], c2fx_scratch_t *scratch)
 {
-    c2fx_scratch_t *work = scratch;
-    struct c2fx_enc_scratch *s = &work->enc;
+    struct c2fx_enc_scratch *s = &scratch->enc;
     c2fx_voicing_tilt_band odd_tilt, even_tilt;
     c2fx_enc_row row;
 

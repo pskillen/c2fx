@@ -101,7 +101,7 @@ Initialize an encoder with `c2fx_enc_init` and call `c2fx_encode` for each
 Subsequent calls return the delayed bitstream, one frame (160 samples)
 behind the input. For a file, omit the startup frame and send a zero-filled
 frame after the last input to drain the final bitstream frame. Encoder and
-decoder calls can reuse the same scratch object.
+decoder calls made from one task can reuse the same scratch object, which is clobbered on each call.
 
 ## License
 
