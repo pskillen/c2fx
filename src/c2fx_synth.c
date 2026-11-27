@@ -224,7 +224,7 @@ static void synthesize(const c2fx_subframe *sub, int32_t *work, int32_t *spec, u
         return;
     }
 
-    c2fx_lpc_log_inv_power(sub->lsp_q1, work);
+    /* work[0..255] already holds the envelope's log2(1 / (|A|^2 + 1e-6)). */
     c2fx_min_phase(work, spec, work, &sh);
     clear_buf(spec, C2FX_DFT);
 

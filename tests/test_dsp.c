@@ -61,6 +61,43 @@ static int test_clz(void)
     return 0;
 }
 
+/* The split and wide forms of c2fx_mulshr16 must agree on every operand:
+ * edge values of x and of the Q15 factor c (|c| <= 32768), every shift
+ * 0..16, then random operands.
+ */
+static int test_mulshr16(void)
+{
+    static const int32_t xs[] = {
+        INT32_MIN, INT32_MIN + 1, -65537, -65536, -65535, -32769, -32768, -1, 0, 1,
+        32767, 32768, 65535, 65536, 65537, INT32_MAX - 1, INT32_MAX
+    };
+    static const int32_t cs[] = {-32768, -32767, -16384, -1, 0, 1, 16384, 32767, 32768};
+    uint32_t state = UINT32_C(0xC2F0A116);
+
+    for (unsigned i = 0; i < sizeof xs / sizeof xs[0]; i++) {
+        for (unsigned j = 0; j < sizeof cs / sizeof cs[0]; j++) {
+            for (int s = 0; s <= 16; s++) {
+                if (c2fx_mulshr16_split(xs[i], cs[j], s) != c2fx_mulshr16_wide(xs[i], cs[j], s) ||
+                    c2fx_mulshr16(xs[i], cs[j], s) != c2fx_mulshr16_wide(xs[i], cs[j], s)) {
+                    fprintf(stderr, "mulshr16 mismatch x=%d c=%d s=%d\n", (int)xs[i], (int)cs[j], s);
+                    return 1;
+                }
+            }
+        }
+    }
+    for (int i = 0; i < 2000000; i++) {
+        int32_t x = (int32_t)xorshift32(&state);
+        int32_t c = (int32_t)(xorshift32(&state) % 65537u) - 32768;
+        int s = (int)(xorshift32(&state) % 17u);
+
+        if (c2fx_mulshr16_split(x, c, s) != c2fx_mulshr16_wide(x, c, s)) {
+            fprintf(stderr, "mulshr16 mismatch x=%d c=%d s=%d\n", (int)x, (int)c, s);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int test_fft(void)
 {
     uint32_t state = 0xC2F0512u;
@@ -280,6 +317,7 @@ int main(void)
     int failed = 0;
 
     failed |= test_clz();
+    failed |= test_mulshr16();
     failed |= test_fft();
     failed |= test_cos();
     failed |= test_log_exp();

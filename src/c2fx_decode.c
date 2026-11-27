@@ -61,9 +61,14 @@ static void synthesize_frame(c2fx_dec_t *st, struct c2fx_dec_scratch *sc, int16_
     int32_t *work = sc->buffers.synth.work;
     int32_t *spec = sc->buffers.synth.spec;
 
+    /* Envelope then synthesis, one sub-frame at a time. The envelope leaves
+     * log2(1 / (|A|^2 + 1e-6)) in log_den, which is work[0..255] (see
+     * c2fx_dec_scratch), and synthesis reads it from there. Synthesis then
+     * overwrites the scratch, so the second envelope starts afresh.
+     */
     c2fx_envelope(&sc->sub[0], log_den, log_num, log_p);
-    c2fx_envelope(&sc->sub[1], log_den, log_num, log_p);
     c2fx_synth_hop(&sc->sub[0], work, spec, &st->phi1, &st->rng, st->ola, pcm);
+    c2fx_envelope(&sc->sub[1], log_den, log_num, log_p);
     c2fx_synth_hop(&sc->sub[1], work, spec, &st->phi1, &st->rng, st->ola, pcm + C2FX_HOP);
 }
 

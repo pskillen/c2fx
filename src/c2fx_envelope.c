@@ -219,13 +219,33 @@ static void rot_by(int32_t *re, int32_t *im, int32_t cr, int32_t ci)
     *im = c2fx_mulshr(r, ci, 30) + c2fx_mulshr(i, cr, 30);
 }
 
-/* log2(|A|^2) or log2(|A|^2 + 1e-6) at the 256 bins of a 512-point DFT.
- * Not an FFT: the other 501 samples are zero, so each bin is the 11-tap
- * polynomial at that frequency. A Q15 FFT loses the cancellation on sharp
- * frames (the residual is a few thousand counts, the same size as the
- * twiddle error). This rotation is Q30, and coeff[k] / 2^q is the coefficient.
+/* log2(|A|^2) or log2(|A|^2 + 1e-6) of one DFT bin, given the bin's
+ * accumulated (re, im). |A|^2 = |acc|^2 * 2^(-2*q).
  */
-static void dft_log_power(const int32_t coeff[11], int q, int floored, int32_t out[SPECTRUM_BINS])
+static int32_t log_power_of(int32_t re, int32_t im, int q, int floored)
+{
+    uint32_t mant;
+    int exp;
+    int true_exp;
+
+    mag2_norm(re, im, &mant, &exp);
+    true_exp = exp - 2 * q;
+    if (floored) {
+        add_norm(&mant, &true_exp, C2FX_POWER_FLOOR_MANT, C2FX_POWER_FLOOR_EXP);
+    }
+    return log2_mag(mant, true_exp);
+}
+
+/* log2(|A|^2 + 1e-6) of den and log2(|A|^2) of num, at the 256 bins of a
+ * 512-point DFT. Not an FFT: the other 501 samples are zero, so each bin is
+ * the 11-tap polynomial at that frequency. A Q15 FFT loses the cancellation
+ * on sharp frames (the residual is a few thousand counts, the same size as
+ * the twiddle error). This rotation is Q30, and coeff[k] / 2^q is the
+ * coefficient. Both polynomials are evaluated in one pass because the
+ * rotations cis(k * bin) depend on the bin alone.
+ */
+static void dft_log_power2(const int32_t den[11], const int32_t num[11], int q,
+                           int32_t out_den[SPECTRUM_BINS], int32_t out_num[SPECTRUM_BINS])
 {
     int32_t step_r = 1 << 30;
     int32_t step_i = 0;
@@ -233,24 +253,20 @@ static void dft_log_power(const int32_t coeff[11], int q, int floored, int32_t o
     for (int bin = 0; bin < SPECTRUM_BINS; bin++) {
         int32_t cis_r = 1 << 30;
         int32_t cis_i = 0;
-        int32_t acc_r = coeff[0];
-        int32_t acc_i = 0;
-        uint32_t mant;
-        int exp;
-        int true_exp;
+        int32_t dr = den[0];
+        int32_t di = 0;
+        int32_t nr = num[0];
+        int32_t ni = 0;
 
         for (int k = 1; k <= C2FX_LSP_ORDER; k++) {
             rot_by(&cis_r, &cis_i, step_r, step_i);
-            acc_r += c2fx_mulshr(coeff[k], cis_r, 30);
-            acc_i += c2fx_mulshr(coeff[k], cis_i, 30);
+            dr += c2fx_mulshr(den[k], cis_r, 30);
+            di += c2fx_mulshr(den[k], cis_i, 30);
+            nr += c2fx_mulshr(num[k], cis_r, 30);
+            ni += c2fx_mulshr(num[k], cis_i, 30);
         }
-        mag2_norm(acc_r, acc_i, &mant, &exp);
-        /* |A|^2 = |acc|^2 * 2^(-2*q). */
-        true_exp = exp - 2 * q;
-        if (floored) {
-            add_norm(&mant, &true_exp, C2FX_POWER_FLOOR_MANT, C2FX_POWER_FLOOR_EXP);
-        }
-        out[bin] = log2_mag(mant, true_exp);
+        out_den[bin] = log_power_of(dr, di, q, 1);
+        out_num[bin] = log_power_of(nr, ni, q, 0);
         rot_bin(&step_r, &step_i);
     }
 }
@@ -340,8 +356,7 @@ void c2fx_envelope(
         gamma[k] = c2fx_mulshr(wide[k], gamma_q15[k], 15);
     }
 
-    dft_log_power(wide, q, 1, log_den);
-    dft_log_power(gamma, q, 0, log_num);
+    dft_log_power2(wide, gamma, q, log_den, log_num);
 
     for (int bin = 0; bin < SPECTRUM_BINS; bin++) {
         int32_t diff = log_num[bin] - log_den[bin];
@@ -387,21 +402,5 @@ void c2fx_envelope(
             log_amp += C2FX_HARM1_LOG2_Q11;
         }
         sub->amp_log2_q11[m - 1] = sat_q11(log_amp);
-    }
-}
-
-void c2fx_lpc_log_inv_power(const int16_t lsp_q1[C2FX_LSP_ORDER], int32_t log2_q11[256])
-{
-    int32_t wide[C2FX_LSP_ORDER + 1];
-    int q;
-
-    /* log2_q11 is filled by the DFT below. The LSP step borrows its first
-     * 39 words for P, Q and the quadratic product.
-     */
-    c2fx_lsp_to_lpc(lsp_q1, wide, &q, log2_q11);
-    /* Floored |A|^2, then negate: log2 of the model's lpc power. */
-    dft_log_power(wide, q, 1, log2_q11);
-    for (int bin = 0; bin < SPECTRUM_BINS; bin++) {
-        log2_q11[bin] = -log2_q11[bin];
     }
 }

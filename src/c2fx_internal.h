@@ -127,6 +127,7 @@ void c2fx_lsp_to_lpc(
 
 /* L and log2 amplitudes. Calls the LSP to LPC step.
  * log_den, log_num and log_p are 256-bin spectra; the caller owns them.
+ * On return log_den is log2(1 / (|A|^2 + 1e-6)), Q11, which synthesis reads.
  */
 void c2fx_envelope(
     c2fx_subframe *sub,
@@ -152,9 +153,6 @@ int32_t c2fx_log2_sum(const int32_t *v, int n, int32_t extra);
 
 void c2fx_dec_state_init(c2fx_dec_t *st);
 
-/* log2(1 / (|A|^2 + 1e-6)) at the 256 bins, Q11. */
-void c2fx_lpc_log_inv_power(const int16_t lsp_q1[C2FX_LSP_ORDER], int32_t log2_q11[256]);
-
 /* Minimum phase of that log-power spectrum.
  * log2_q11 is bins 0..255. fft and side are 512 long and distinct.
  * side may alias log2_q11's buffer. On return, side[] is the complex log
@@ -173,6 +171,9 @@ uint32_t c2fx_exc_harmonic(uint32_t phi1, uint32_t *rng, int voiced, int m);
 
 /* One hop: minimum phase, inverse FFT, triangle, overlap-add.
  * work and spec are 512 int32 scratch buffers. pcm receives 80 samples.
+ * On entry work[0..255] is log2(1 / (|A|^2 + 1e-6)) in Q11 for this
+ * sub-frame: the log_den that c2fx_envelope just left, when work is the
+ * start of the same union (c2fx_dec_scratch). Nothing else of work is read.
  */
 void c2fx_synth_hop(
     const c2fx_subframe *sub,

@@ -83,13 +83,46 @@ static inline uint32_t c2fx_mulshr_round(int32_t a, int32_t b, int s)
     return (uint32_t)((uint64_t)p >> s);
 }
 
-/* (x * c) >> s for a 16-bit factor c, 0 <= s <= 16. Two 32-bit products.
- * c is a Q15 twiddle or gain, so |c| <= 32768.
+/* (x * c) >> s for a 16-bit factor c, 0 <= s <= 16. c is a Q15 twiddle or
+ * gain, so |c| <= 32768. Two forms with one result, chosen by target:
+ *
+ * Split form: two 32-bit products, for cores with no cheap 32x32->64
+ * multiply (C-SKY CK803S keeps this form).
+ * Wide form: one 64-bit product, where the core has it natively (Armv7-M,
+ * Armv7E-M and Armv8-M Mainline `smull`, and 64-bit hosts).
+ *
+ * Why they agree. Write x = xh * 2^16 + xl with xh = x >> 16 (floor) and
+ * xl = x & 0xFFFF in 0..65535. Then x * c = xh * c * 2^16 + xl * c, and for
+ * s <= 16 the first term is a multiple of 2^s, so
+ *     floor(x * c / 2^s) = xh * c * 2^(16 - s) + floor(xl * c / 2^s).
+ * The right side is the split form before its 32-bit wrap: xh * c is within
+ * +-2^30 and |xl * c| below 2^31, so neither product overflows, and the
+ * arithmetic shift of the int32 xl * c is that floor. The wide form is the left side, truncated to 32 bits; the split
+ * form adds in uint32_t, so it is the same value modulo 2^32.
  */
-static inline int32_t c2fx_mulshr16(int32_t x, int32_t c, int s)
+static inline int32_t c2fx_mulshr16_split(int32_t x, int32_t c, int s)
 {
     return (int32_t)(((uint32_t)((x >> 16) * c) << (16 - s)) +
                      (uint32_t)(((int32_t)(x & 0xFFFF) * c) >> s));
+}
+
+static inline int32_t c2fx_mulshr16_wide(int32_t x, int32_t c, int s)
+{
+    return (int32_t)(uint32_t)((uint64_t)((int64_t)x * c) >> s);
+}
+
+#if !defined(C2FX_MULSHR16_SPLIT) && \
+    (defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__) || defined(__LP64__))
+#define C2FX_MULSHR16_WIDE 1
+#endif
+
+static inline int32_t c2fx_mulshr16(int32_t x, int32_t c, int s)
+{
+#ifdef C2FX_MULSHR16_WIDE
+    return c2fx_mulshr16_wide(x, c, s);
+#else
+    return c2fx_mulshr16_split(x, c, s);
+#endif
 }
 
 /* Full unsigned 32x32 product. */
