@@ -63,8 +63,11 @@ struct c2fx_dec {
 
 /* Temporary decoder buffers. */
 struct c2fx_dec_scratch {
-    /* Both envelope calls finish before synthesis writes work or spec.
-     * The log arrays are dead at that point; the results live in sub.
+    /* Envelope(k) runs, then synthesis(k). log_den is work[0..255], so the
+     * envelope's log spectrum is the input of synthesis and no third DFT is
+     * needed. log_num and log_p (work[256..511], spec[0..255]) are dead once
+     * the envelope returns; their results live in sub. The union keeps its
+     * size: nothing was added.
      */
     union {
         struct {
