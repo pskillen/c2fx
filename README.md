@@ -9,6 +9,9 @@ A fixed-point implementation of the Codec 2 3200 bit/s mode, written from the pu
 
 Pre-release. The fixed-point library encodes and decodes 3200 bit/s frames.
 
+Release 0.2.1 speeds up the decoder by about 28 % (1.29 M to 0.93 M cycles per frame on a Cortex-M4 simulator at `-O2`)
+with bit-identical output: the same bit patterns still give the same samples, and the API and state sizes are unchanged.
+
 ## Goals
 
 - Bitstream-compatible with the Codec 2 3200 mode as used by M17.
