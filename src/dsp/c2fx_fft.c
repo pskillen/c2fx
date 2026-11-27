@@ -88,21 +88,38 @@ static void cfft(int32_t *z, int inv)
             if (2 * k == half) {
                 continue;
             }
-            c = sin_idx((uint32_t)(k * step + 256));
-            s = sin_idx((uint32_t)(k * step));
+            /* cos and sin of k * step table steps (k * step < 512, half a
+             * turn), read from the quarter-wave table without sin_idx.
+             */
+            if (k * step < 256) {
+                c = c2fx_sin_tab[256 - k * step];
+                s = c2fx_sin_tab[k * step];
+            } else {
+                c = -c2fx_sin_tab[k * step - 256];
+                s = c2fx_sin_tab[512 - k * step];
+            }
             if (!inv) {
                 s = -s;
             }
-            for (int i = k; i < n; i += len) {
-                int32_t *a = z + 2 * i;
-                int32_t *b = z + 2 * (i + half);
-                int32_t tr = mulq15(b[0], c) - mulq15(b[1], s);
-                int32_t ti = mulq15(b[0], s) + mulq15(b[1], c);
+            {
+                int32_t *a = z + 2 * k;
+                int32_t *const end = z + 2 * n;
+                const int stride = 2 * len;
+                const int off = 2 * half;
 
-                b[0] = a[0] - tr;
-                b[1] = a[1] - ti;
-                a[0] += tr;
-                a[1] += ti;
+                for (; a < end; a += stride) {
+                    int32_t br = a[off];
+                    int32_t bi = a[off + 1];
+                    int32_t tr = mulq15(br, c) - mulq15(bi, s);
+                    int32_t ti = mulq15(br, s) + mulq15(bi, c);
+                    int32_t ar = a[0];
+                    int32_t ai = a[1];
+
+                    a[off] = ar - tr;
+                    a[off + 1] = ai - ti;
+                    a[0] = ar + tr;
+                    a[1] = ai + ti;
+                }
             }
         }
     }
